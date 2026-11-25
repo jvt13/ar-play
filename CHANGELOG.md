@@ -9,7 +9,8 @@
 - Resolução de sobreposição permite recuo e movimento tangencial sem aumentar a penetração; mantém subpassos e saída próxima, sem deslocamento automático.
 - Diagnóstico mostra origem do bloqueio, amostras/apoio local da sonda, custo, idade da confirmação e cobertura insuficiente. Apoio local não representa precisão do sensor.
 - Fixtures geométricas e sessões XR simuladas cobrem mapa parcial, persistência lateral, liberação confiável, recuo, deslizamento, fallback e limpeza; benchmark mede separadamente sonda, mapa e consulta final.
-- Cache `ar-play-v1.1.1` e inventários públicos atualizados. Baseline 1.1.0 preservada no histórico; sem dependências de execução, alterações de modelos ou homologação física antecipada.
+- Expiração de ocupação descarta votos livres fracos acumulados, retornando a região a desconhecida; regressão geométrica cobre esse caso limite.
+- Cache final `ar-play-v1.1.1-r2` e inventários públicos atualizados; a revisão substitui também o primeiro deploy da correção. Baseline 1.1.0 preservada no histórico; sem dependências de execução, alterações de modelos ou homologação física antecipada.
 
 ## 1.1.0 — 2026-11-25
 

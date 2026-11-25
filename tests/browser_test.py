@@ -5,7 +5,7 @@ from functools import partial
 from threading import Thread
 from urllib.request import urlopen as _urlopen
 from urllib.error import HTTPError
-import tempfile, os, shutil, json, time
+import tempfile, os, shutil, json, time, re
 
 def urlopen(*args,**kwargs):
  # Bounded transport retry for provider 5xx; all final 200/404 assertions stay strict.
@@ -86,8 +86,10 @@ try:
   page.evaluate('navigator.serviceWorker.ready');page.wait_for_function('navigator.serviceWorker.controller !== null')
   assert page.evaluate('(async () => (await navigator.serviceWorker.ready).scope)()')==base_url
   version=json.loads((ROOT/'package.json').read_text(encoding='utf-8'))['version']
-  assert page.evaluate('caches.keys()')==['ar-play-v'+version]
-  assert page.evaluate('(async () => (await (await caches.open("ar-play-v'+version+'")).keys()).length)()')==13
+  cache=re.search(r"const CACHE='([^']+)'",(ROOT/'sw.js').read_text(encoding='utf-8')).group(1)
+  assert re.fullmatch(r'ar-play-v'+re.escape(version)+r'(-r[1-9][0-9]*)?',cache),cache
+  assert page.evaluate('caches.keys()')==[cache]
+  assert page.evaluate('(async () => (await (await caches.open("'+cache+'")).keys()).length)()')==13
   print('PASS service worker scope and versioned cache')
   context.set_offline(True);page.reload();page.wait_for_function('window.__arplay?.state().frameCount > 2');print('PASS offline reload')
   for char in ['nori','luma','bip']:

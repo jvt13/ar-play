@@ -174,3 +174,15 @@ test('many queries of a single native pixel cannot fabricate strong immediate ev
   assert.equal(s.probe.used, 0); assert.equal(s.probe.count, 0); assert.equal(s.map.occupiedCount, 0);
   assert.ok(s.move(position, 0, -.1, 2).z < -1.09);
 });
+
+test('expired occupied cells discard accumulated weak-free votes and return to unknown', () => {
+  const m = confirmedMap();
+  for (const t of [4500, 4625, 4750, 4875]) {
+    m.begin(t, [0, 0, 0], 1);
+    m.traceFree(.09, .3, 0, .09, .3, -3); // Weak ray through another part of the voxel.
+  }
+  assert.equal(m.stateAt(.02, .3, -1.2, 5000), 'occupied');
+  m.expire(5250);
+  assert.equal(m.stateAt(.02, .3, -1.2, 5250), 'unknown');
+  assert.equal(m.free.has(m.key(0, 2, -10)), false);
+});

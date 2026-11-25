@@ -83,7 +83,11 @@ export class SpatialMap {
   expire(time) {
     const c = this.config;
     for (const cell of this.cells.values()) if (time - cell.time >= (cell.confirmed ? c.ttl : c.candidateTtl)) {
-      if (cell.confirmed) this.occupiedCount--;
+      if (cell.confirmed) {
+        this.occupiedCount--;
+        // Weak rays accumulated while occupied cannot become clearance just because time passed.
+        this.free.delete(cell.key);
+      }
       this.cells.delete(cell.key);
     }
     for (const cell of this.free.values()) if (time - cell.time >= c.freeTtl) this.free.delete(cell.key);

@@ -46,7 +46,8 @@ test('service worker precaches public resources, removes obsolete caches and ser
   const handlers = {}, stored = new Map(), removed = [];
   let opened, skipped = false, claimed = false, networkFails = false;
   const version = JSON.parse(read('package.json')).version;
-  const current = `ar-play-v${version}`;
+  const current = /const CACHE='([^']+)'/.exec(read('sw.js'))[1];
+  assert.match(current, new RegExp(`^ar-play-v${version.replaceAll('.', '\\.')}(-r[1-9][0-9]*)?$`));
   const context = {
     URL,
     self: {
@@ -65,7 +66,7 @@ test('service worker precaches public resources, removes obsolete caches and ser
           }
         }};
       },
-      keys: async () => ['ar-play-v1.0.0', 'ar-play-v1.0.1', 'ar-play-v1.0.2', 'ar-play-v1.1.0', current, 'another-app-cache'],
+      keys: async () => ['ar-play-v1.0.0', 'ar-play-v1.0.1', 'ar-play-v1.0.2', 'ar-play-v1.1.0', 'ar-play-v1.1.1', current, 'another-app-cache'],
       delete: async name => { removed.push(name); return true; },
       match: async request => stored.get(new URL(typeof request === 'string' ? request : request.url, base).href),
     },
@@ -85,7 +86,7 @@ test('service worker precaches public resources, removes obsolete caches and ser
   assert.ok(skipped);
   assert.equal(stored.size, 13);
   await lifecycle('activate');
-  assert.deepEqual(removed, ['ar-play-v1.0.0', 'ar-play-v1.0.1', 'ar-play-v1.0.2', 'ar-play-v1.1.0']);
+  assert.deepEqual(removed, ['ar-play-v1.0.0', 'ar-play-v1.0.1', 'ar-play-v1.0.2', 'ar-play-v1.1.0', 'ar-play-v1.1.1']);
   assert.ok(claimed);
   const request = (file, mode = 'cors', method = 'GET') => ({url: new URL(file, base).href, mode, method});
   async function response(req) {
