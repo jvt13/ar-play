@@ -1,12 +1,12 @@
 {
   "name": "ar-play",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
   "scripts": {
     "start": "node server.mjs",
     "test": "node --test tests/*.test.js",
-    "check": "node --check sw.js && node --check src/app.js && node --check src/depth.js && node --check src/engine.js && node --check src/math.js && node --check server.mjs"
+    "check": "node --check sw.js && node --check src/app.js && node --check src/depth.js && node --check src/spatial-map.js && node --check src/collision.js && node --check src/engine.js && node --check src/math.js && node --check server.mjs"
   },
   "engines": {
     "node": ">=18"

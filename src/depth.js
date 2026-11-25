@@ -9,6 +9,7 @@ export async function requestDepthSession(xr, options) {
     optionalFeatures: [...(options.optionalFeatures || []), 'depth-sensing'],
     depthSensing: {
       usagePreference: ['cpu-optimized'],
+      matchDepthView: true,
       // These two enum values are also understood by earlier Chrome implementations.
       dataFormatPreference: ['luminance-alpha', 'float32'],
     },
@@ -38,7 +39,7 @@ export function createDepthReader(info, format) {
   // One typed view per sampled frame; no copies, per-pixel objects or retained XR resources.
   return {
     width, height,
-    at(x, y) {
+    at(x, y, strict = false) {
       if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || x > 1 || y < 0 || y > 1) return null;
       // Column-major normDepthBufferFromNormView, top-left normalized view coordinates.
       const w = matrix[3] * x + matrix[7] * y + matrix[15];
@@ -46,6 +47,7 @@ export function createDepthReader(info, format) {
       const u = (matrix[0] * x + matrix[4] * y + matrix[12]) / w;
       const v = (matrix[1] * x + matrix[5] * y + matrix[13]) / w;
       if (!Number.isFinite(u) || !Number.isFinite(v)) return null;
+      if (strict && (u < 0 || u > 1 || v < 0 || v > 1)) return null;
       const col = Math.max(0, Math.min(width - 1, Math.trunc(u * width)));
       const row = Math.max(0, Math.min(height - 1, Math.trunc(v * height)));
       const meters = data[row * width + col] * scale;
@@ -131,63 +133,71 @@ export class DepthDiagnostics {
     this.lastRead = -Infinity;
   }
 
-  update(time, frame, view) {
-    if (!this.enabled || frame.session !== this.session) return;
-    if (this.lastFrame !== null && time > this.lastFrame) {
-      const fps = 1000 / (time - this.lastFrame);
-      this.state.fps = this.state.fps === null ? fps : this.state.fps * .9 + fps * .1;
+  update(time, frame, view, consumer = null) {
+    if (frame.session !== this.session) return;
+    if (this.enabled) {
+      if (this.lastFrame !== null && time > this.lastFrame) {
+        const fps = 1000 / (time - this.lastFrame);
+        this.state.fps = this.state.fps === null ? fps : this.state.fps * .9 + fps * .1;
+      }
+      this.lastFrame = time;
     }
-    this.lastFrame = time;
-    if (time - this.lastRead < this.interval) return;
-    this.lastRead = time;
-    this.clearMeasurements();
-    this.state.status = this.capability;
-    this.state.detail = this.reason;
+    const diagnosticDue = this.enabled && time - this.lastRead >= this.interval;
+    const spatialDue = !!consumer?.wantsDepth(time);
+    if (!diagnosticDue && !spatialDue) return;
+    if (diagnosticDue) {
+      this.lastRead = time; this.clearMeasurements();
+      this.state.status = this.capability; this.state.detail = this.reason;
+    }
     const started = this.now();
     let attempted = false;
     try {
       if (this.capability === 'waiting' && view) {
         attempted = true;
-        if (typeof frame.getDepthInformation !== 'function') throw new Error('Leitor CPU ausente no frame');
+        if (typeof frame.getDepthInformation !== 'function') throw new Error('CPU reader absent');
         const info = frame.getDepthInformation(view);
         if (info) {
+          // Exactly one native acquisition and one typed reader for both consumers.
           const reader = createDepthReader(info, this.state.format);
-          this.state.width = reader.width;
-          this.state.height = reader.height;
-          this.state.center = reader.at(.5, .5);
-          const columns = this.mapEnabled ? MAP_WIDTH : 8;
-          const rows = this.mapEnabled ? MAP_HEIGHT : 8;
-          let valid = 0;
-          for (let y = 0; y < rows; y++) for (let x = 0; x < columns; x++) {
-            const meters = reader.at((x + .5) / columns, (y + .5) / rows);
-            if (meters !== null) valid++;
-            if (this.mapEnabled && this.image) {
-              const i = (y * columns + x) * 4;
-              const light = meters === null ? 0 : Math.round(32 + 223 * (1 - Math.min(meters, 5) / 5));
-              this.image.data[i] = this.image.data[i + 1] = this.image.data[i + 2] = light;
-              this.image.data[i + 3] = 255;
+          const acquisitionMs = Math.max(0, this.now() - started);
+          if (spatialDue) {
+            try { consumer.accept(time, reader, info, view); }
+            catch { consumer.missing(time, 'error'); }
+          }
+          if (diagnosticDue) {
+            const diagnosticStart = this.now();
+            this.state.width = reader.width; this.state.height = reader.height;
+            this.state.center = reader.at(.5, .5);
+            const columns = this.mapEnabled ? MAP_WIDTH : 8, rows = this.mapEnabled ? MAP_HEIGHT : 8;
+            let valid = 0;
+            for (let y = 0; y < rows; y++) for (let x = 0; x < columns; x++) {
+              const meters = reader.at((x + .5) / columns, (y + .5) / rows);
+              if (meters !== null) valid++;
+              if (this.mapEnabled && this.image) {
+                const i = (y * columns + x) * 4;
+                const light = meters === null ? 0 : Math.round(32 + 223 * (1 - Math.min(meters, 5) / 5));
+                this.image.data[i] = this.image.data[i + 1] = this.image.data[i + 2] = light;
+                this.image.data[i + 3] = 255;
+              }
             }
+            this.state.valid = valid; this.state.total = columns * rows;
+            const available = valid > 0 || this.state.center !== null;
+            this.state.status = available ? 'available' : 'waiting';
+            this.state.detail = available ? '' : 'Sem amostras válidas na grade';
+            if (this.mapEnabled && this.image) { this.context.putImageData(this.image, 0, 0); this.elements.mapCanvas.hidden = false; }
+            this.state.costMs = acquisitionMs + Math.max(0, this.now() - diagnosticStart);
           }
-          this.state.valid = valid;
-          this.state.total = columns * rows;
-          const available = valid > 0 || this.state.center !== null;
-          this.state.status = available ? 'available' : 'waiting';
-          this.state.detail = available ? '' : 'Mapa recebido, sem amostras válidas na grade.';
-          if (this.mapEnabled && this.image) {
-            this.context.putImageData(this.image, 0, 0);
-            this.elements.mapCanvas.hidden = false;
-          }
-        }
-      }
+        } else if (spatialDue) consumer.missing(time, 'waiting');
+      } else if (spatialDue) consumer.missing(time, this.capability === 'waiting' ? 'tracking' : 'unavailable');
     } catch (error) {
-      this.clearMeasurements();
-      this.state.status = 'error';
-      this.state.detail = error.name || 'Erro';
+      if (diagnosticDue) { this.clearMeasurements(); this.state.status = 'error'; this.state.detail = error.name || 'Error'; }
+      if (spatialDue) consumer.missing(time, 'error');
     }
-    this.state.costMs = attempted ? Math.max(0, this.now() - started) : null;
-    // Protect the rendering budget if native acquisition/copy or sampling is expensive.
-    if (this.state.costMs > 8) this.interval = 1000;
-    this.render();
+    if (diagnosticDue) {
+      if (attempted && this.state.costMs === null) this.state.costMs = Math.max(0, this.now() - started);
+      if (this.state.costMs > 8) this.interval = 1000;
+      this.render();
+    }
   }
 
   snapshot() {

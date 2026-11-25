@@ -60,7 +60,7 @@ test('depth negotiation is optional, requests CPU and preserves base AR features
   assert.equal(result.fallback, false);
   assert.deepEqual(received.requiredFeatures, ['hit-test', 'dom-overlay']);
   assert.deepEqual(received.optionalFeatures, ['anchors', 'depth-sensing']);
-  assert.deepEqual(received.depthSensing, {usagePreference: ['cpu-optimized'], dataFormatPreference: ['luminance-alpha', 'float32']});
+  assert.deepEqual(received.depthSensing, {usagePreference: ['cpu-optimized'], matchDepthView: true, dataFormatPreference: ['luminance-alpha', 'float32']});
   assert.equal(received.domOverlay, base.domOverlay);
   assert.deepEqual(base.optionalFeatures, ['anchors']);
   assert.equal(base.depthSensing, undefined);

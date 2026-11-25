@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.1.0 — 2026-11-25
+
+- Colisões reais experimentais no modo AR, desligadas por padrão e independentes do painel de diagnóstico.
+- Reconstrução de profundidade axial no referencial XR, com projeção inversa, pose do mesmo frame e rejeição de geometria de fonte incompatível.
+- Mapa esparso temporário de 12 cm, limitado em memória, com confirmação temporal, descarte de ruído, cobertura desconhecida, raios de espaço observado e expiração.
+- Cilindros derivados dos modelos, seguindo seleção e escala; bloqueio horizontal, recuo, deslizamento, subpassos e saída de sobreposição inicial sem deslocamento automático.
+- Pulo visual preservado sem deslocar o volume horizontal; sem gravidade adicional, subida ou oclusão.
+- Aquisição CPU compartilhada com o diagnóstico, sem duplicar consultas no mesmo XRFrame.
+- Indicadores de mapa/colisão, visualização superior opcional e limites adaptativos de frequência e amostras.
+- Limpeza ao desativar, encerrar, reposicionar ou invalidar o referencial; baseline 1.0.2 preservada no histórico.
+- Testes geométricos sintéticos, integração XR simulada e benchmark CPU reproduzível; sem homologação física antecipada.
+- Cache `ar-play-v1.1.0` com os novos módulos e inventários públicos atualizados. Sem dependências de execução.
+
 ## 1.0.2 — 2026-11-24
 
 - Depth Sensing opcional na sessão WebXR, com preferência CPU e fallback para a configuração AR anterior.

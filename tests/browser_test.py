@@ -3,9 +3,18 @@ from playwright.sync_api import sync_playwright
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from functools import partial
 from threading import Thread
-from urllib.request import urlopen
+from urllib.request import urlopen as _urlopen
 from urllib.error import HTTPError
-import tempfile, os, shutil, json
+import tempfile, os, shutil, json, time
+
+def urlopen(*args,**kwargs):
+ # Bounded transport retry for provider 5xx; all final 200/404 assertions stay strict.
+ for attempt in range(5):
+  try:return _urlopen(*args,**kwargs)
+  except HTTPError as error:
+   if error.code not in (502,503,504) or attempt==4:raise
+   print('INFO HTTP retry',attempt+1,'status',error.code,flush=True)
+   error.close();time.sleep(2**attempt)
 
 ROOT=Path(__file__).resolve().parents[1]
 PUBLIC=['index.html','style.css','manifest.webmanifest','sw.js','src','icons']
@@ -28,14 +37,14 @@ if not base_url:
  base_url=f'http://localhost:{server.server_port}/ar-play/'
 base_url=base_url.rstrip('/')+'/'
 try:
- resources={'':'text/html','index.html':'text/html','style.css':'text/css','manifest.webmanifest':'application/manifest+json','sw.js':'javascript','src/app.js':'javascript','src/depth.js':'javascript','src/math.js':'javascript','src/engine.js':'javascript','icons/icon-192.png':'image/png','icons/icon-512.png':'image/png'}
+ resources={'':'text/html','index.html':'text/html','style.css':'text/css','manifest.webmanifest':'application/manifest+json','sw.js':'javascript','src/app.js':'javascript','src/depth.js':'javascript','src/spatial-map.js':'javascript','src/collision.js':'javascript','src/math.js':'javascript','src/engine.js':'javascript','icons/icon-192.png':'image/png','icons/icon-512.png':'image/png'}
  for name,mime in resources.items():
   with urlopen(base_url+name,timeout=30) as response:
    assert response.status==200,(name,response.status)
    assert mime in response.headers.get('Content-Type',''),(name,response.headers)
    assert response.read(),name
- print('PASS HTTP 200 and MIME types for all 11 public routes',base_url)
- for name in ['server.mjs','package.json','tests/browser_test.py','tests/app.test.js','tests/depth.test.js','tests/xr_fixture.js','reports/report.md','reports/','README.md','CHANGELOG.md','TESTES.txt','iniciar.bat','.github/workflows/deploy-pages.yml','.git/config','.env']:
+ print('PASS HTTP 200 and MIME types for all 13 public routes',base_url)
+ for name in ['server.mjs','package.json','tests/browser_test.py','tests/app.test.js','tests/depth.test.js','tests/spatial.test.js','tests/collision.test.js','tests/spatial_benchmark.mjs','tests/xr_fixture.js','reports/report.md','reports/','README.md','CHANGELOG.md','TESTES.txt','iniciar.bat','.github/workflows/deploy-pages.yml','.git/config','.env']:
   try:
    with urlopen(base_url+name,timeout=30) as response:raise AssertionError(f'Private file exposed: {name} ({response.status})')
   except HTTPError as error:assert error.code==404,(name,error.code)
@@ -78,7 +87,7 @@ try:
   assert page.evaluate('(async () => (await navigator.serviceWorker.ready).scope)()')==base_url
   version=json.loads((ROOT/'package.json').read_text(encoding='utf-8'))['version']
   assert page.evaluate('caches.keys()')==['ar-play-v'+version]
-  assert page.evaluate('(async () => (await (await caches.open("ar-play-v'+version+'")).keys()).length)()')==10
+  assert page.evaluate('(async () => (await (await caches.open("ar-play-v'+version+'")).keys()).length)()')==12
   print('PASS service worker scope and versioned cache')
   context.set_offline(True);page.reload();page.wait_for_function('window.__arplay?.state().frameCount > 2');print('PASS offline reload')
   for char in ['nori','luma','bip']:
@@ -119,6 +128,13 @@ try:
     xr.wait_for_function('(expected) => window.__arplay.depth().status === expected',arg=expected)
     assert xr.evaluate('window.__xrTest.reads')==0
     if scenario=='reject-option':assert xr.evaluate('window.__xrTest.requests')==[True,False]
+    # Even without depth, opted-in collisions cannot prevent conventional AR movement.
+    xr.evaluate('window.__xrTest.spatial=true');xr.wait_for_function('window.__xrTest.hitReady')
+    xr.evaluate('window.__xrTest.place()');xr.locator('#collisionToggle').check()
+    xr.locator('#joystick').focus();xr.keyboard.down('ArrowUp');xr.wait_for_timeout(500);xr.keyboard.up('ArrowUp')
+    assert xr.evaluate('window.__arplay.state().pos[2]') < -1.02
+    assert xr.evaluate('window.__arplay.spatial().phase')=='unavailable'
+    xr.locator('#collisionToggle').uncheck()
    xr.locator('#depthToggle').click();reads=xr.evaluate('window.__xrTest.reads');frames=xr.evaluate('window.__arplay.state().frameCount')
    xr.wait_for_timeout(400);assert xr.evaluate('window.__xrTest.reads')==reads
    assert xr.evaluate('window.__arplay.state().frameCount')>frames
@@ -128,6 +144,43 @@ try:
    assert xr.locator('#arDiagnostics').is_hidden()
    assert not xr_errors,xr_errors;xr.close()
    print('PASS SIMULATED XR depth UI, rendering continuity, cleanup and fallback:',scenario)
+  ar=simulated.new_page();collision_errors=[];ar.on('pageerror',lambda error:collision_errors.append(str(error)))
+  ar.goto(base_url+'?test=1');ar.wait_for_function('window.__arplay?.state().frameCount > 3')
+  ar.evaluate('window.__xrTest.spatial=true');ar.locator('#ar').click()
+  ar.wait_for_function('window.__xrTest.hitReady');ar.evaluate('window.__xrTest.place()')
+  assert not ar.locator('#collisionToggle').is_checked();assert ar.locator('#depthPanel').is_hidden()
+  ar.locator('#collisionToggle').check()
+  ar.wait_for_function('window.__arplay.spatial().occupied > 0',timeout=15000)
+  assert ar.locator('#depthPanel').is_hidden();assert ar.evaluate('window.__xrTest.reads')>0
+  start=ar.evaluate('window.__arplay.state().pos')
+  ar.locator('#joystick').focus();ar.keyboard.down('ArrowUp');ar.wait_for_timeout(2500)
+  ar.wait_for_function('window.__arplay.spatial().blocked',timeout=15000)
+  stopped=ar.evaluate('window.__arplay.state().pos');assert -1.8 < stopped[2] < start[2]-.05,(start,stopped)
+  ar.locator('#jump').click();ar.wait_for_timeout(400)
+  jumped=ar.evaluate('window.__arplay.state().pos');assert abs(jumped[2]-stopped[2])<.04;assert jumped[1]==0
+  ar.keyboard.up('ArrowUp');ar.locator('#joystick').focus();ar.keyboard.down('ArrowDown');ar.wait_for_timeout(700);ar.keyboard.up('ArrowDown')
+  retreated=ar.evaluate('window.__arplay.state().pos');assert retreated[2]>stopped[2]+.05
+  ar.keyboard.down('ArrowUp');ar.keyboard.down('ArrowRight');ar.wait_for_timeout(1800);ar.keyboard.up('ArrowUp');ar.keyboard.up('ArrowRight')
+  slid=ar.evaluate('window.__arplay.state().pos');assert slid[0]>retreated[0]+.1;assert slid[2]>-1.8
+  ar.locator('#depthToggle').click();ar.wait_for_function('document.querySelector("#collisionReadout").textContent.includes("Células")')
+  ar.locator('#collisionVisualToggle').check();ar.wait_for_function('!document.querySelector("#collisionMap").hidden')
+  ar.locator('#collisionMap').scroll_into_view_if_needed()
+  assert ar.evaluate("() => { const pixels=document.querySelector('#collisionMap').getContext('2d').getImageData(0,0,128,128).data; for(let i=1;i<pixels.length;i+=4) if(pixels[i]>180 && pixels[i]>pixels[i-1] && pixels[i]>pixels[i+1]) return true; return false; }")
+  if os.environ.get('PREVIEW'):ar.screenshot(path=str(Path(os.environ['PREVIEW']).with_name('simulated-collision-'+Path(os.environ['PREVIEW']).name)))
+  for char in ['nori','luma','bip']:
+   ar.locator(f'[data-character={char}]').click();ar.wait_for_timeout(100)
+   assert ar.evaluate('window.__arplay.state().id')==char
+  ar.locator('#size').fill('140');ar.wait_for_function('window.__arplay.spatial().radius > .4')
+  ar.evaluate('window.__xrTest.resetReference()');ar.wait_for_function('window.__arplay.spatial().cells === 0')
+  ar.wait_for_timeout(300);assert ar.evaluate('window.__arplay.spatial().occupied')==0
+  ar.evaluate('window.__xrTest.place()');ar.wait_for_function('window.__arplay.spatial().occupied > 0',timeout=15000)
+  ar.locator('#collisionToggle').uncheck();ar.locator('#depthToggle').click()
+  reads=ar.evaluate('window.__xrTest.reads');ar.wait_for_timeout(400)
+  assert ar.evaluate('window.__xrTest.reads')==reads;assert ar.evaluate('window.__arplay.spatial().cells')==0
+  ar.locator('#demo').click();ar.wait_for_function("window.__arplay.state().mode === 'demo'")
+  assert ar.evaluate('window.__arplay.spatial().enabled') is False
+  assert not collision_errors,collision_errors;ar.close()
+  print('PASS SIMULATED real-depth collision pipeline: wall, retreat, slide, jump, model/scale, reference reset and closed diagnosis')
   simulated.close();browser.close()
 finally:
  if server:server.shutdown();server.server_close()

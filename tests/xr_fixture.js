@@ -9,10 +9,18 @@
     document.body.append(banner);
   });
   const data = new Uint16Array(64).fill(2000).buffer;
+  const P = new Float32Array([1.3,0,0,0,0,1.3,0,0,0,0,-1.01,-1,0,0,-.1,0]);
+  const camera = new Float32Array(I); camera[13] = .35;
+  const cameraInverse = new Float32Array(I); cameraInverse[13] = -.35;
   class FakeFrame {
     constructor(session) { this.session = session; }
-    getViewerPose() { return {transform: {matrix: I}, views: [{projectionMatrix: I, transform: {inverse: {matrix: I}}}]}; }
-    getHitTestResults() { return []; }
+    getViewerPose() { return {transform: {matrix: camera}, views: [{projectionMatrix: P, transform: {matrix: camera, inverse: {matrix: cameraInverse}}}]}; }
+    getHitTestResults() {
+      if (!test.spatial) return [];
+      test.hitReady = true;
+      const placement = new Float32Array(I); placement[14] = -1;
+      return [{getPose: () => ({transform: {matrix: placement}})}];
+    }
     getDepthInformation() {
       if (!test.active) throw new DOMException('Inactive synthetic frame', 'InvalidStateError');
       test.reads++;
@@ -45,7 +53,10 @@
         get depthDataFormat() { if (!granted) throw new DOMException('Not granted', 'InvalidStateError'); return 'luminance-alpha'; },
         addEventListener: (name, callback) => { handlers[name] = callback; },
         updateRenderState(state) { this.renderState = state; },
-        requestReferenceSpace: async () => ({}),
+        requestReferenceSpace: async type => {
+          const ref = new EventTarget(); if (type === 'local') test.resetReference = () => ref.dispatchEvent(new Event('reset'));
+          return ref;
+        },
         requestHitTestSource: async () => ({cancel() {}}),
         requestAnimationFrame(callback) {
           requestAnimationFrame(time => {
@@ -56,6 +67,7 @@
         },
         async end() { this.ended = true; handlers.end?.(); },
       };
+      test.place = () => handlers.select?.();
       return session;
     },
   }});
