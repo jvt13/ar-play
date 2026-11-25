@@ -1,8 +1,8 @@
 import {invert4} from './math.js';
 
 export const SPATIAL_CONFIG = Object.freeze({
-  cellSize: .12, radius: 3, floorTolerance: .06, ttl: 3000, candidateTtl: 1000,
-  freeTtl: 1500, confirmations: 3, freeConfirmations: 3, maxCells: 4096,
+  cellSize: .12, radius: 3, floorTolerance: .06, ttl: 5000, candidateTtl: 1000,
+  freeTtl: 1500, confirmations: 3, freeConfirmations: 4, occupiedHold: 750, pointMargin: .025, maxCells: 4096,
   maxFreeCells: 8192, maxRaySteps: 96, surfaceMargin: .18,
 });
 const finiteMatrix = m => m?.length === 16 && m.every(Number.isFinite);
@@ -61,7 +61,8 @@ export class SpatialMap {
       Number.isInteger(c.maxFreeCells) && c.maxFreeCells > 0 && c.maxFreeCells <= 32768 &&
       Number.isInteger(c.maxRaySteps) && c.maxRaySteps > 0 && c.maxRaySteps <= 256 &&
       Number.isInteger(c.confirmations) && c.confirmations >= 2 && Number.isInteger(c.freeConfirmations) && c.freeConfirmations >= 2 &&
-      c.floorTolerance >= 0 && c.floorTolerance < .25 && c.candidateTtl > 0 && c.freeTtl > 0)) throw new Error('Invalid spatial limits');
+      c.floorTolerance >= 0 && c.floorTolerance < .25 && c.candidateTtl > 0 && c.freeTtl > 0 &&
+      c.occupiedHold >= 0 && c.occupiedHold <= c.ttl && c.pointMargin >= 0 && c.pointMargin <= .06)) throw new Error('Invalid spatial limits');
     this.cells = new Map(); this.free = new Map(); this.origin = new Float64Array(3); this.normal = new Float64Array(3);
     this.clear();
   }
@@ -100,20 +101,23 @@ export class SpatialMap {
     let cell = this.cells.get(key);
     if (!cell) {
       if (this.cells.size >= this.config.maxCells) { this.saturated = true; return false; }
-      cell = {key, ix, iy, iz, minY: y, maxY: y, hits: 0, time: this.time, batch: -1, confirmed: false, freeHits: 0, freeBatch: -1};
+      cell = {key, ix, iy, iz, minX: x, maxX: x, minY: y, maxY: y, minZ: z, maxZ: z,
+        hits: 0, time: this.time, batch: -1, confirmed: false, freeHits: 0, freeBatch: -1};
       this.cells.set(key, cell);
     }
     if (cell.batch !== this.batch) {
       cell.hits = this.time - cell.time < this.config.candidateTtl ? Math.min(this.config.confirmations, cell.hits + 1) : 1;
       cell.batch = this.batch; cell.time = this.time; cell.freeHits = 0;
-      cell.minY = cell.maxY = y;
+      // Keep the observed envelope across viewpoints until this cell expires/is reliably cleared.
       if (!cell.confirmed && cell.hits >= this.config.confirmations) { cell.confirmed = true; this.occupiedCount++; }
     }
+    cell.minX = Math.min(cell.minX, x); cell.maxX = Math.max(cell.maxX, x);
     cell.minY = Math.min(cell.minY, y); cell.maxY = Math.max(cell.maxY, y);
+    cell.minZ = Math.min(cell.minZ, z); cell.maxZ = Math.max(cell.maxZ, z);
     this.free.delete(key);
     return true;
   }
-  markFree(ix, iy, iz) {
+  markFree(ix, iy, iz, reliable = false) {
     const c = this.config, s = c.cellSize, o = this.origin;
     if (!this.inRegion(o[0] + (ix + .5) * s, o[1] + (iy + .5) * s, o[2] + (iz + .5) * s)) return;
     const key = this.key(ix, iy, iz); if (key < 0) return;
@@ -124,10 +128,14 @@ export class SpatialMap {
       if (this.free.size >= c.maxFreeCells) { this.saturated = true; return; }
       known = {key, time: this.time, batch: -1, hits: 0}; this.free.set(key, known);
     }
-    if (known.batch === this.batch) return;
-    known.batch = this.batch; known.time = this.time; known.hits = Math.min(c.freeConfirmations, known.hits + 1);
-    if (cell && cell.freeBatch !== this.batch) {
-      cell.freeBatch = this.batch; cell.freeHits++;
+    if (known.batch !== this.batch) {
+      known.batch = this.batch; known.time = this.time; known.hits = Math.min(c.freeConfirmations, known.hits + 1);
+    }
+    // A grazing ray is weak evidence: it may cover empty space in an occupied voxel.
+    // Only central, unobstructed observations after the hold period can erase occupancy.
+    if (cell && reliable && this.time - cell.time >= c.occupiedHold && cell.freeBatch !== this.batch) {
+      cell.freeHits = cell.freeBatch === this.batch - 1 ? cell.freeHits + 1 : 1;
+      cell.freeBatch = this.batch;
       if (cell.freeHits >= c.freeConfirmations) {
         if (cell.confirmed) this.occupiedCount--;
         this.cells.delete(key);
@@ -146,7 +154,15 @@ export class SpatialMap {
     let tz = sz ? (o[2] + (iz + (sz > 0 ? 1 : 0)) * s - cz) / dz : Infinity;
     const ax = sx ? s / Math.abs(dx) : Infinity, ay = sy ? s / Math.abs(dy) : Infinity, az = sz ? s / Math.abs(dz) : Infinity;
     for (let steps = 0, distance = 0; steps < this.config.maxRaySteps && distance < limit; steps++) {
-      this.markFree(ix, iy, iz);
+      const cell = this.cells.get(this.key(ix, iy, iz));
+      let reliable = false;
+      if (cell) {
+        const px = (cell.minX + cell.maxX) / 2, py = (cell.minY + cell.maxY) / 2, pz = (cell.minZ + cell.maxZ) / 2;
+        const along = (px - cx) * dx + (py - cy) * dy + (pz - cz) * dz;
+        const error = (px - cx - along * dx) ** 2 + (py - cy - along * dy) ** 2 + (pz - cz - along * dz) ** 2;
+        reliable = along > 0 && along < limit && error <= .035 ** 2;
+      }
+      this.markFree(ix, iy, iz, reliable);
       if (tx <= ty && tx <= tz) { distance = tx; tx += ax; ix += sx; }
       else if (ty <= tz) { distance = ty; ty += ay; iy += sy; }
       else { distance = tz; tz += az; iz += sz; }
@@ -170,21 +186,34 @@ export class SpatialMap {
     }
     return known / 15;
   }
-  collides(x, z, volume, time, skin = .015) {
-    if (!this.ready) return false;
+  collides(x, z, volume, time, skin = .015) { return this.penetration(x, z, volume, time, skin) > 0; }
+  penetration(x, z, volume, time, skin = .015) {
+    this.contactTime = -Infinity;
+    if (!this.ready) return 0;
     const c = this.config, s = c.cellSize, o = this.origin, r = volume.radius + skin;
-    const minX = Math.floor((x - r - o[0]) / s), maxX = Math.floor((x + r - o[0]) / s);
-    const minZ = Math.floor((z - r - o[2]) / s), maxZ = Math.floor((z + r - o[2]) / s);
+    let overlap = 0;
+    const minX = Math.floor((x - r - c.pointMargin - o[0]) / s), maxX = Math.floor((x + r + c.pointMargin - o[0]) / s);
+    const minZ = Math.floor((z - r - c.pointMargin - o[2]) / s), maxZ = Math.floor((z + r + c.pointMargin - o[2]) / s);
     const minY = Math.floor((volume.ground + c.floorTolerance - o[1]) / s), maxY = Math.floor((volume.ground + volume.height - o[1]) / s);
     for (let ix = minX; ix <= maxX; ix++) for (let iz = minZ; iz <= maxZ; iz++) {
       const lowX = o[0] + ix * s, lowZ = o[2] + iz * s;
-      const dx = Math.max(lowX - x, 0, x - lowX - s), dz = Math.max(lowZ - z, 0, z - lowZ - s);
+      const dx = Math.max(lowX - c.pointMargin - x, 0, x - lowX - s - c.pointMargin), dz = Math.max(lowZ - c.pointMargin - z, 0, z - lowZ - s - c.pointMargin);
       if (dx * dx + dz * dz >= r * r - 1e-10) continue;
       for (let iy = minY; iy <= maxY; iy++) {
         const cell = this.cells.get(this.key(ix, iy, iz));
-        if (cell?.confirmed && time - cell.time < c.ttl && cell.minY < volume.ground + volume.height && cell.maxY > volume.ground + c.floorTolerance) return true;
+        if (cell?.confirmed && time - cell.time < c.ttl && cell.minY < volume.ground + volume.height && cell.maxY > volume.ground + c.floorTolerance) {
+          // Refine the broad-phase voxel with measured extents, avoiding up to 12 cm of artificial wall thickness.
+          const ax = cell.minX - c.pointMargin, bx = cell.maxX + c.pointMargin;
+          const az = cell.minZ - c.pointMargin, bz = cell.maxZ + c.pointMargin;
+          const ex = Math.max(ax - x, 0, x - bx), ez = Math.max(az - z, 0, z - bz);
+          const distance = Math.hypot(ex, ez);
+          const inside = !distance ? Math.min(x - ax, bx - x, z - az, bz - z) : 0;
+          const depth = r - distance + inside;
+          overlap = Math.max(overlap, depth);
+          if (depth > 0) this.contactTime = Math.max(this.contactTime, cell.time);
+        }
       }
     }
-    return false;
+    return Math.max(0, overlap);
   }
 }

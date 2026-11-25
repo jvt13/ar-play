@@ -37,14 +37,14 @@ if not base_url:
  base_url=f'http://localhost:{server.server_port}/ar-play/'
 base_url=base_url.rstrip('/')+'/'
 try:
- resources={'':'text/html','index.html':'text/html','style.css':'text/css','manifest.webmanifest':'application/manifest+json','sw.js':'javascript','src/app.js':'javascript','src/depth.js':'javascript','src/spatial-map.js':'javascript','src/collision.js':'javascript','src/math.js':'javascript','src/engine.js':'javascript','icons/icon-192.png':'image/png','icons/icon-512.png':'image/png'}
+ resources={'':'text/html','index.html':'text/html','style.css':'text/css','manifest.webmanifest':'application/manifest+json','sw.js':'javascript','src/app.js':'javascript','src/depth.js':'javascript','src/spatial-map.js':'javascript','src/collision.js':'javascript','src/movement-probe.js':'javascript','src/math.js':'javascript','src/engine.js':'javascript','icons/icon-192.png':'image/png','icons/icon-512.png':'image/png'}
  for name,mime in resources.items():
   with urlopen(base_url+name,timeout=30) as response:
    assert response.status==200,(name,response.status)
    assert mime in response.headers.get('Content-Type',''),(name,response.headers)
    assert response.read(),name
- print('PASS HTTP 200 and MIME types for all 13 public routes',base_url)
- for name in ['server.mjs','package.json','tests/browser_test.py','tests/app.test.js','tests/depth.test.js','tests/spatial.test.js','tests/collision.test.js','tests/spatial_benchmark.mjs','tests/xr_fixture.js','reports/report.md','reports/','README.md','CHANGELOG.md','TESTES.txt','iniciar.bat','.github/workflows/deploy-pages.yml','.git/config','.env']:
+ print('PASS HTTP 200 and MIME types for all 14 public routes',base_url)
+ for name in ['server.mjs','package.json','tests/browser_test.py','tests/app.test.js','tests/depth.test.js','tests/spatial.test.js','tests/collision.test.js','tests/hybrid.test.js','tests/spatial_benchmark.mjs','tests/xr_fixture.js','reports/report.md','reports/','README.md','CHANGELOG.md','TESTES.txt','iniciar.bat','.github/workflows/deploy-pages.yml','.git/config','.env']:
   try:
    with urlopen(base_url+name,timeout=30) as response:raise AssertionError(f'Private file exposed: {name} ({response.status})')
   except HTTPError as error:assert error.code==404,(name,error.code)
@@ -87,7 +87,7 @@ try:
   assert page.evaluate('(async () => (await navigator.serviceWorker.ready).scope)()')==base_url
   version=json.loads((ROOT/'package.json').read_text(encoding='utf-8'))['version']
   assert page.evaluate('caches.keys()')==['ar-play-v'+version]
-  assert page.evaluate('(async () => (await (await caches.open("ar-play-v'+version+'")).keys()).length)()')==12
+  assert page.evaluate('(async () => (await (await caches.open("ar-play-v'+version+'")).keys()).length)()')==13
   print('PASS service worker scope and versioned cache')
   context.set_offline(True);page.reload();page.wait_for_function('window.__arplay?.state().frameCount > 2');print('PASS offline reload')
   for char in ['nori','luma','bip']:
@@ -181,6 +181,25 @@ try:
   assert ar.evaluate('window.__arplay.spatial().enabled') is False
   assert not collision_errors,collision_errors;ar.close()
   print('PASS SIMULATED real-depth collision pipeline: wall, retreat, slide, jump, model/scale, reference reset and closed diagnosis')
+  hybrid=simulated.new_page();hybrid_errors=[];hybrid.on('pageerror',lambda error:hybrid_errors.append(str(error)))
+  hybrid.goto(base_url+'?test=1');hybrid.wait_for_function('window.__arplay?.state().frameCount > 3')
+  hybrid.evaluate('Object.assign(window.__xrTest,{spatial:true,highResolution:true,placementZ:-1.4,maxDepthReads:2})')
+  hybrid.locator('#ar').click();hybrid.wait_for_function('window.__xrTest.hitReady');hybrid.evaluate('window.__xrTest.place()')
+  hybrid.locator('#joystick').focus();hybrid.keyboard.down('ArrowUp');hybrid.locator('#collisionToggle').check()
+  hybrid.wait_for_function('window.__arplay.spatial().probeSamples >= 3',timeout=10000)
+  assert hybrid.evaluate('window.__arplay.spatial().occupied')==0
+  assert hybrid.locator('#depthPanel').is_hidden()
+  hybrid.wait_for_function('window.__arplay.spatial().blockSource === "sonda imediata"',timeout=10000)
+  probe_stop=hybrid.evaluate('window.__arplay.state().pos[2]');assert -1.7 < probe_stop < -1.4,probe_stop
+  assert hybrid.evaluate('window.__arplay.spatial().coverageInsufficient') is True
+  hybrid.keyboard.up('ArrowUp');hybrid.locator('#joystick').focus();hybrid.keyboard.down('ArrowDown')
+  hybrid.wait_for_timeout(200);hybrid.keyboard.up('ArrowDown')
+  assert hybrid.evaluate('window.__arplay.state().pos[2]') > probe_stop+.025
+  hybrid.locator('#depthToggle').click()
+  hybrid.wait_for_function('document.querySelector("#collisionReadout").textContent.includes("Custo da sonda")')
+  hybrid.locator('#collisionToggle').uncheck();assert hybrid.evaluate('window.__arplay.spatial().probeSamples')==0
+  hybrid.locator('#demo').click();assert not hybrid_errors,hybrid_errors;hybrid.close()
+  print('PASS SIMULATED hybrid immediate probe: partial map, limited coverage, actual stop/retreat, closed diagnosis and cleanup')
   simulated.close();browser.close()
 finally:
  if server:server.shutdown();server.server_close()

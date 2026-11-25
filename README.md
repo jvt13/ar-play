@@ -1,4 +1,4 @@
-# AR Play — v1.1.0 (MVP)
+# AR Play — v1.1.1 (MVP)
 
 Aplicativo web de personagens 3D interativos, inspirado na experiência de câmera com efeitos de realidade aumentada. Não é uma reprodução do TikTok. Os três personagens (Bip, Nori e Luma) são construídos proceduralmente, sem baixar modelos ou usar ativos proprietários.
 
@@ -6,7 +6,7 @@ Aplicativo web de personagens 3D interativos, inspirado na experiência de câme
 
 - **Estúdio 3D**: demonstração sem câmera. Funciona em navegador com WebGL.
 - **Câmera criativa**: câmera frontal/traseira + personagens 3D compostos em um canvas, foto PNG e vídeo WebM/MP4 conforme os codecs disponíveis. Não rastreia superfícies físicas. Vídeo sem áudio.
-- **AR espacial**: usa WebXR `immersive-ar`, `hit-test` e `dom-overlay` sobre ARCore. Detecta superfícies horizontais e posiciona um personagem em coordenadas do mundo durante a sessão. O personagem pode ser movido em um plano horizontal, sem colisão nem oclusão por objetos reais. Foto e vídeo são desabilitados neste modo. A gravação de tela do próprio Android é uma alternativa a testar, não um recurso do aplicativo.
+- **AR espacial**: usa WebXR `immersive-ar`, `hit-test` e `dom-overlay` sobre ARCore. Detecta superfícies horizontais e posiciona um personagem em coordenadas do mundo durante a sessão. O personagem pode ser movido em um plano horizontal, com colisões reais experimentais opcionais, sem oclusão. Foto e vídeo são desabilitados neste modo. A gravação de tela do próprio Android é uma alternativa a testar, não um recurso do aplicativo.
 
 ## Executar no computador
 
@@ -29,6 +29,7 @@ Acesso via IP local por HTTP (por exemplo, http://192.168.x.x:8080) pode abrir a
 - `src/depth.js`: negociação opcional de profundidade e diagnóstico experimental em AR, sem física ou oclusão.
 - `src/spatial-map.js`: reconstrução no referencial XR e mapa esparso temporário de ocupação/cobertura.
 - `src/collision.js`: volumes dos personagens, consultas locais, resolução horizontal e diagnóstico das colisões.
+- `src/movement-probe.js`: sonda do corredor de movimento, evidência imediata e memória curta de contatos derivados da profundidade.
 - `src/engine.js`: WebGL 1, shaders, malhas procedurais, animações e iluminação direcional simples.
 - `src/math.js`: matrizes de transformação, projeção e utilitários.
 - `manifest.webmanifest`, `sw.js`, `icons/`: instalação PWA e cache offline dos arquivos após primeiro acesso.
@@ -39,7 +40,7 @@ A câmera, renderização e gravação são processadas localmente. O app não e
 
 ## Testes
 
-`npm test`: 47 testes, preservando os 21 anteriores e acrescentando reconstrução 3D, projeções assimétricas, chão, confirmação/expiração, cobertura desconhecida, paredes/móveis, posições efetivas, recuo, deslizamento, escala e limpeza. `npm run check` valida a sintaxe JavaScript. Geometria e sessões automatizadas são sintéticas; a suíte de navegador também verifica a integração XR simulada e a preservação dos modos existentes.
+`npm test`: 60 testes, incluindo reconstrução 3D, projeções assimétricas, chão, confirmação/expiração, cobertura desconhecida, paredes/móveis, posições efetivas, recuo, deslizamento, escala e limpeza. A correção 1.1.1 acrescenta bloqueio imediato com mapa parcial, persistência lateral, liberação confiável, limites geométricos do contato e saída de sobreposição. `npm run check` valida a sintaxe JavaScript. Geometria e sessões automatizadas são sintéticas; a suíte de navegador também verifica a integração XR simulada, a sonda com diagnóstico fechado e a preservação dos modos existentes.
 
 Benchmark CPU opcional: `node tests/spatial_benchmark.mjs`. Usa geometria sintética, informa ambiente, mediana, p95 e máximos; não mede sensor, câmera ou desempenho no celular.
 
@@ -49,7 +50,7 @@ Câmera física, sensores, instalação no Android e ARCore exigem validação n
 
 ## Diagnóstico AR experimental — 1.0.2
 
-A baseline 1.0.1 recebeu 18/18 aprovações físicas na ARP-002, conforme informado pelo gestor. A disponibilidade de profundidade CPU da 1.0.2 foi confirmada pelo usuário; a precisão geométrica ainda não foi validada por medidas de referência. As colisões da 1.1.0 exigem homologação física própria.
+A baseline 1.0.1 recebeu 18/18 aprovações físicas na ARP-002, conforme informado pelo gestor. A disponibilidade de profundidade CPU da 1.0.2 foi confirmada pelo usuário; a precisão geométrica ainda não foi validada por medidas de referência. O teste físico da 1.1.0 identificou instabilidade nas colisões; a correção 1.1.1 exige nova homologação física.
 
 Entre em **AR espacial** e toque em **Diagnóstico AR**. O painel começa desligado em cada sessão e pode ser fechado sem sair de AR. Estúdio e Câmera mantêm seus controles e aparência. O painel mostra WebXR, sessão, acesso e formato concedidos, resolução real do mapa, profundidade central em metros, amostras válidas da vista e FPS XR estimado.
 
@@ -71,34 +72,37 @@ Gravidade adicional, subida em objetos e oclusão não estão implementadas. A b
 
 Referências: [WebXR versus ARCore](https://developers.google.com/ar/develop/webxr/arcore-comparison), [Depth do ARCore](https://developers.google.com/ar/develop/depth) e [WebXR Depth Sensing](https://www.w3.org/TR/webxr-depth-sensing-1/). A disponibilidade é confirmada pelas capacidades da sessão no navegador, sem presumir equivalência com as APIs nativas.
 
-## Colisões reais — experimental (1.1.0)
+## Colisões reais — experimental (1.1.1)
 
 Entre em AR espacial, posicione o personagem na superfície de apoio e marque **Colisões reais (experimental)**. A opção começa desligada em cada sessão. O mapa funciona com o diagnóstico fechado. Desativar limpa o mapa e libera a movimentação convencional, interrompendo o trabalho exclusivo das colisões.
 
-O personagem interrompe o avanço contra ocupação confirmada, pode recuar e deslizar lateralmente. O pulo continua visual: seu volume horizontal permanece ancorado ao apoio e não permite atravessar uma parede conhecida. Não há deslocamento automático para fora de obstáculos. Em sobreposição inicial, a entrada do usuário pode conduzir a uma saída próxima; casos profundos podem exigir reposicionamento manual.
+O personagem interrompe o avanço contra ocupação confirmada ou evidência imediata coerente, pode recuar e deslizar lateralmente. O pulo continua visual: seu volume horizontal permanece ancorado ao apoio e não permite atravessar uma parede conhecida. Não há deslocamento automático para fora de obstáculos. Em sobreposição inicial, movimentos que aliviam o contato ou são tangenciais continuam possíveis, além da busca limitada de uma saída próxima. Casos profundos podem exigir reposicionamento manual.
 
-Estados: **Mapeando ambiente**, **Colisões ativas**, **Obstáculo detectado**, **Cobertura limitada** e **Profundidade indisponível**. Regiões desconhecidas usam movimentação convencional com cobertura limitada; elas não são consideradas comprovadamente livres. Obstáculos confirmados ainda válidos continuam bloqueando mesmo se os dados deixarem de chegar.
+Estados: **Mapeando ambiente**, **Colisões ativas**, **Obstáculo detectado**, **Cobertura limitada** e **Profundidade indisponível**. A decisão combina mapa persistente e uma sonda do corredor pretendido. Cobertura limitada não ignora evidência frontal recente nem ocupação válida. Sem qualquer evidência utilizável, mantém-se a movimentação convencional com indicação de limitação; regiões desconhecidas não são consideradas comprovadamente livres. Não há garantia de bloqueio em áreas sem observação ou após expiração de toda evidência.
 
 | Parâmetro inicial | Valor |
 | --- | --- |
 | Voxel / região de interesse | 12 cm / raio de 3 m ao redor do personagem |
 | Confirmação | Três atualizações distintas; múltiplos pixels no mesmo frame não bastam |
-| Validade da ocupação | Até 3 s sem nova observação; depois volta a desconhecido |
+| Validade da ocupação | Até 5 s sem nova observação; depois volta a desconhecido |
+| Remoção antecipada | Pelo menos 750 ms desde a última observação e quatro atualizações consecutivas com raio livre a até 3,5 cm do centro observado, terminando além da margem de 18 cm |
 | Atualização espacial | Alvo inicial 8 Hz, adaptativo conforme custo |
+| Sonda imediata | Até 75 consultas em corredor de largura coerente com o personagem e alcance adicional de 85 cm; até aproximadamente 15 Hz durante movimento, reduzido a 8 Hz se o custo superar 2 ms |
+| Evidência imediata | Pelo menos três pixels nativos distintos e próximos, unidos em segmentos locais de até 26 cm; memória geométrica de 900 ms e limite de 128 segmentos |
 | Limites de memória | 4.096 células de ocupação/candidatas e 8.192 de cobertura livre amostrada |
 | Tolerância do apoio | 6 cm, metade do voxel, configurável para avaliação de ruído |
 
-O filtro usa a normal e a altura do apoio escolhido. Outras superfícies horizontais acima dele não são automaticamente transitáveis. Pontos acima do personagem são excluídos da faixa de colisão. Cilindros conservadores acompanham escala e dimensões derivadas dos modelos, incluindo caminhada/dança; em escala AR padrão, os raios são aproximadamente 32 cm para Bip/Luma e 37 cm para Nori.
+O filtro usa a normal e a altura do apoio escolhido. Outras superfícies horizontais acima dele não são automaticamente transitáveis. Pontos acima do personagem são excluídos da faixa de colisão. Cilindros conservadores acompanham escala e dimensões derivadas dos modelos, incluindo caminhada/dança; em escala AR padrão, os raios são aproximadamente 32 cm para Bip/Luma e 37 cm para Nori. Esses volumes foram preservados. A consulta refina cada voxel com os limites efetivamente observados, margem de 2,5 cm e pele de 1,5 cm, evitando acrescentar toda a espessura do voxel à parede. A resolução continua aproximada.
 
 A reconstrução usa profundidade axial, projeção inversa e pose da vista do mesmo XRFrame. A transformação vista/mapa é aplicada uma vez. Metadados de sensor incompatíveis são rejeitados; na API CPU legada, utiliza-se o contrato de alinhamento à vista solicitado na sessão. Não são misturadas coordenadas CSS, pixels de tela e metros XR.
 
-O processamento usa até 432 amostras por atualização, rejeita pontos isolados e reduz para 192 amostras sob carga. A taxa diminui quando a reconstrução ultrapassa o orçamento de 4 ms e pode se recuperar gradualmente após estabilização. Esses orçamentos não são resultados medidos no aparelho. O mapa só armazena dados derivados em memória e é limpo ao encerrar, reposicionar ou invalidar o referencial. Reset do reference space exige novo posicionamento.
+O mapa usa até 432 amostras por atualização, rejeita pontos isolados e reduz para 192 amostras sob carga. A taxa diminui quando a reconstrução ultrapassa o orçamento de 4 ms e pode se recuperar gradualmente após estabilização. A sonda projeta posições do corredor na vista real do mesmo frame, reutiliza a aquisição CPU e conta pixels distintos, sem consultar novamente `getDepthInformation`. Apenas evidência coerente adquirida no frame pode reforçar o mapa, respeitando suas confirmações temporais. Contatos em memória não renovam sua própria validade. O corredor usa a intenção do frame anterior: pode haver até um frame de atraso no início ou troca de direção. Esses orçamentos não são resultados medidos no aparelho. As duas camadas só armazenam dados derivados em memória e são limpas ao desativar, encerrar, reposicionar ou invalidar o referencial. Reset do reference space exige novo posicionamento.
 
-No **Diagnóstico AR**, consulte pontos usados, células ocupadas, frequência, reconstrução, consulta, cobertura, direção bloqueada e FPS. A opção **Obstáculos e volume** mostra uma vista superior XR: vermelho para ocupação confirmada e círculo verde para o personagem. O fundo escuro não comprova espaço livre; a visualização é limitada a 512 células e começa desligada.
+No **Diagnóstico AR**, consulte pontos usados, células ocupadas, frequência, reconstrução, custo da sonda, consulta final, cobertura, direção bloqueada, origem do bloqueio (mapa, sonda ou ambos), idade da confirmação do bloqueio e FPS. O apoio local conta vizinhos coerentes; não mede precisão nem confiança do sensor. Cobertura insuficiente é indicada separadamente da ausência de bloqueio atual. A opção **Obstáculos e volume** mostra uma vista superior XR: vermelho para ocupação confirmada do mapa e círculo verde para o personagem; os contatos exclusivos da sonda não aparecem nessa imagem. O fundo escuro não comprova espaço livre; a visualização é limitada a 512 células e começa desligada.
 
-Limitações: mapa esparso e temporário, confirmação com atraso e precisão ainda não calibrada. Objetos finos, pequenos, fora da vista ou sob a tolerância podem não ser detectados. A resolução e o cilindro conservador podem bloquear passagens visualmente apertadas; superfícies removidas podem permanecer por até 3 s se não houver observações livres suficientes. Não se trata de reconstrução completa, reconhecimento de objetos ou confirmação de que uma região desconhecida está livre.
+Limitações: mapa esparso e temporário, confirmação com atraso e precisão ainda não calibrada. Objetos finos, pequenos, fora da vista ou sob a tolerância podem não ser detectados. A resolução e o cilindro conservador podem bloquear passagens visualmente apertadas; superfícies removidas podem permanecer por até 5 s se não houver observações livres confiáveis. A sonda pode manter contato por até 900 ms após retirada do objeto. O aumento de persistência reduz esquecimentos, com esse custo de liberação mais lenta. Não se trata de reconstrução completa, reconhecimento de objetos ou confirmação de que uma região desconhecida está livre.
 
-Para validar: compare desligado/ligado; aproxime o personagem de parede e móvel baixos, teste avanço, recuo, diagonal, lateral, pulo, os três personagens e escalas. Remova um obstáculo e confira a limpeza/expiração. Compare chão e objetos acima do personagem, perda de rastreamento, reposicionamento e encerramento. Registre posições, estados, FPS, tempos e medidas físicas de referência. Refaça as funcionalidades da baseline.
+Para validar: recarregue online a versão 1.1.1 e compare desligado/ligado. Teste primeiro chão livre e reposicionamento, depois parede e móvel baixos: avanço, recuo, diagonal, lateral e pulo. Mude levemente a câmera mantendo o obstáculo visível e confira a continuidade do bloqueio. Repita com diagnóstico fechado e aberto, cobertura limitada, os três personagens e escalas. Remova um obstáculo e confira liberação por observação confiável ou expiração em até 5 s. Compare objetos acima do personagem, perda de rastreamento e encerramento. Registre origem do bloqueio, apoio local, idade, cobertura, FPS, custos e medidas físicas de referência. Refaça as funcionalidades da baseline. A baseline 1.1.0 permanece no histórico em `e01205801ce0b8e0ac00044e019d53bb88c0df67`; qualquer restauração usa novo commit, sem force push.
 
 ## Publicação
 
@@ -124,6 +128,6 @@ Para futuras versões do aplicativo, altere a versão em `package.json` e o iden
 
 ## Limitações e evolução
 
-As validações físicas anteriores não homologam as colisões experimentais da 1.1.0. Sem máscaras faciais, reconhecimento corporal, oclusão real, subida em objetos, multiplayer, áudio ou biblioteca de modelos externos. A qualidade visual é simplificada. Não há APK. Se o requisito central for gravar a AR espacial com áudio, o próximo passo recomendado é avaliar aplicativo nativo Kotlin + ARCore com composição explícita da imagem da câmera e do render 3D; isso deve ser validado no hardware antes de escolher o pipeline definitivo.
+As validações físicas anteriores não homologam as colisões experimentais da 1.1.1. Sem máscaras faciais, reconhecimento corporal, oclusão real, subida em objetos, multiplayer, áudio ou biblioteca de modelos externos. A qualidade visual é simplificada. Não há APK. Se o requisito central for gravar a AR espacial com áudio, o próximo passo recomendado é avaliar aplicativo nativo Kotlin + ARCore com composição explícita da imagem da câmera e do render 3D; isso deve ser validado no hardware antes de escolher o pipeline definitivo.
 
 Referências: https://developers.google.com/ar/develop/webxr/requirements ; https://developers.google.com/ar/develop/webxr/arcore-comparison ; https://developers.google.com/ar/devices ; https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/captureStream ; https://developer.mozilla.org/en-US/docs/Web/API/MediaRecorder .

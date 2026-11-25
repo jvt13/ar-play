@@ -98,8 +98,8 @@ test('reconstructed depth wall blocks actual movement with diagnosis closed (syn
   assert.ok(result.z > -1.8 && result.z < -1.1); assert.ok(system.blocked);
   system.missing(400, 'waiting');
   assert.ok(system.move([0, 0, -1], 0, -2, 500).z > -1.8); // Live confirmed geometry persists.
-  system.frame(3500, true);
-  assert.ok(system.move([0, 0, -1], 0, -2, 3500).z < -2.9); // Expired unknown uses conventional fallback.
+  system.frame(5500, true);
+  assert.ok(system.move([0, 0, -1], 0, -2, 5500).z < -2.9); // Expired unknown uses conventional fallback.
   assert.equal(system.phase(), 'unavailable');
 });
 
@@ -174,8 +174,12 @@ test('single native acquisition feeds diagnostics and spatial map, no retained X
   Object.defineProperty(fixture.info, 'data', {get() { assert.ok(active); reads++; return buffer; }});
   const frame = {session, getDepthInformation: () => { assert.ok(active); nativeCalls++; return fixture.info; }};
   monitor.start(session, {apiAvailable: true});
-  for (const time of [0, 125, 250]) { system.frame(time, true); active = true; monitor.update(time, frame, fixture.view, system); active = false; }
+  for (const time of [0, 125, 250]) {
+    system.move([0, 0, -1], 0, -.001, time); system.frame(time, true);
+    active = true; monitor.update(time, frame, fixture.view, system); active = false;
+  }
   assert.equal(monitor.enabled, false); assert.equal(nativeCalls, 3); assert.equal(reads, 3); assert.ok(system.map.occupiedCount > 0);
+  assert.equal(system.probe.tested, 75); assert.ok(system.probe.used >= 3);
   monitor.setEnabled(true); system.frame(375, true); active = true; monitor.update(375, frame, fixture.view, system); active = false;
   assert.equal(nativeCalls, 4); assert.equal(reads, 4); assert.equal(monitor.snapshot().center, 2);
   monitor.setEnabled(false); system.setEnabled(false); monitor.update(500, frame, fixture.view, system); assert.equal(nativeCalls, 4);

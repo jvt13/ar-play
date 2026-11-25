@@ -38,8 +38,9 @@ export function createDepthReader(info, format) {
   const data = new Type(buffer, 0, width * height);
   // One typed view per sampled frame; no copies, per-pixel objects or retained XR resources.
   return {
-    width, height,
+    width, height, lastIndex: -1,
     at(x, y, strict = false) {
+      this.lastIndex = -1;
       if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || x > 1 || y < 0 || y > 1) return null;
       // Column-major normDepthBufferFromNormView, top-left normalized view coordinates.
       const w = matrix[3] * x + matrix[7] * y + matrix[15];
@@ -50,7 +51,8 @@ export function createDepthReader(info, format) {
       if (strict && (u < 0 || u > 1 || v < 0 || v > 1)) return null;
       const col = Math.max(0, Math.min(width - 1, Math.trunc(u * width)));
       const row = Math.max(0, Math.min(height - 1, Math.trunc(v * height)));
-      const meters = data[row * width + col] * scale;
+      this.lastIndex = row * width + col;
+      const meters = data[this.lastIndex] * scale;
       return Number.isFinite(meters) && meters > 0 ? meters : null;
     },
   };

@@ -82,19 +82,22 @@ test('close observations consolidate, but a single frame never confirms an obsta
 
 test('occupied expiration means unknown, never proven free (synthetic)', () => {
   const map = anchored(); confirm(map, .02, .3, -.5);
-  assert.equal(map.stateAt(.02, .3, -.5, 3249), 'occupied');
-  assert.equal(map.stateAt(.02, .3, -.5, 3250), 'unknown');
-  map.expire(3250); assert.equal(map.occupiedCount, 0); assert.equal(map.cells.size, 0);
-  assert.equal(map.stateAt(.02, .3, -.5, 3250), 'unknown');
+  assert.equal(map.stateAt(.02, .3, -.5, 5249), 'occupied');
+  assert.equal(map.stateAt(.02, .3, -.5, 5250), 'unknown');
+  map.expire(5250); assert.equal(map.occupiedCount, 0); assert.equal(map.cells.size, 0);
+  assert.equal(map.stateAt(.02, .3, -.5, 5250), 'unknown');
 });
 
 test('removed objects clear through repeated free rays; occluded geometry is not cleared (synthetic)', () => {
   const map = anchored(); confirm(map, .02, .3, -1.2);
   for (const time of [375, 500]) { map.begin(time, [0, 0, 0], 1); map.traceFree(.02, .3, 0, .02, .3, -3); }
   assert.equal(map.occupiedCount, 1);
-  map.begin(625, [0, 0, 0], 1); map.traceFree(.02, .3, 0, .02, .3, -3);
-  assert.equal(map.occupiedCount, 0); assert.equal(map.stateAt(.02, .3, -1.2, 625), 'free');
-  map.expire(2125); assert.equal(map.stateAt(.02, .3, -1.2, 2125), 'unknown');
+  // A central ray must remain unobstructed after the 750 ms hold, for four distinct updates.
+  for (const time of [1000, 1125, 1250]) { map.begin(time, [0, 0, 0], 1); map.traceFree(.02, .3, 0, .02, .3, -3); }
+  assert.equal(map.occupiedCount, 1);
+  map.begin(1375, [0, 0, 0], 1); map.traceFree(.02, .3, 0, .02, .3, -3);
+  assert.equal(map.occupiedCount, 0); assert.equal(map.stateAt(.02, .3, -1.2, 1375), 'free');
+  map.expire(2875); assert.equal(map.stateAt(.02, .3, -1.2, 2875), 'unknown');
   map.clear([0, 0, 0]); confirm(map, .02, .3, -2);
   for (const time of [375, 500, 625]) { map.begin(time, [0, 0, 0], 1); map.traceFree(.02, .3, 0, .02, .3, -1); }
   assert.equal(map.stateAt(.02, .3, -2, 625), 'occupied');

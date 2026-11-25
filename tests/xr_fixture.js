@@ -9,6 +9,7 @@
     document.body.append(banner);
   });
   const data = new Uint16Array(64).fill(2000).buffer;
+  const detailedData = new Uint16Array(160 * 90).fill(2000).buffer;
   const P = new Float32Array([1.3,0,0,0,0,1.3,0,0,0,0,-1.01,-1,0,0,-.1,0]);
   const camera = new Float32Array(I); camera[13] = .35;
   const cameraInverse = new Float32Array(I); cameraInverse[13] = -.35;
@@ -18,19 +19,20 @@
     getHitTestResults() {
       if (!test.spatial) return [];
       test.hitReady = true;
-      const placement = new Float32Array(I); placement[14] = -1;
+      const placement = new Float32Array(I); placement[14] = test.placementZ ?? -1;
       return [{getPose: () => ({transform: {matrix: placement}})}];
     }
     getDepthInformation() {
       if (!test.active) throw new DOMException('Inactive synthetic frame', 'InvalidStateError');
       test.reads++;
+      if (test.maxDepthReads && test.reads > test.maxDepthReads) return null;
       if (test.scenario === 'missing') return null;
       if (test.scenario === 'error') throw new DOMException('Synthetic read failure', 'InvalidStateError');
       return {
-        width: 8, height: 8, rawValueToMeters: .001, normDepthBufferFromNormView: {matrix: I},
+        width: test.highResolution ? 160 : 8, height: test.highResolution ? 90 : 8, rawValueToMeters: .001, normDepthBufferFromNormView: {matrix: I},
         get data() {
           if (!test.active) throw new DOMException('Inactive synthetic depth buffer', 'InvalidStateError');
-          return data;
+          return test.highResolution ? detailedData : data;
         },
       };
     }

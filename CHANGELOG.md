@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.1.1 — 2026-11-25
+
+- Correção experimental das colisões AR com combinação de mapa persistente e sonda imediata do corredor de movimento, ativa mesmo com diagnóstico fechado.
+- Sonda limitada a 75 consultas e 128 segmentos derivados; requer pixels distintos e suporte espacial coerente, com memória de contato de 900 ms. Aquisição nativa compartilhada no mesmo XRFrame.
+- Ocupação mantida por até 5 s, removida antecipadamente apenas após 750 ms sem observação e quatro confirmações livres centrais consecutivas; raios rasantes continuam sendo evidência fraca.
+- Refinamento dos voxels com limites observados e margem de 2,5 cm, preservando cilindros dos personagens e pele de contato de 1,5 cm.
+- Resolução de sobreposição permite recuo e movimento tangencial sem aumentar a penetração; mantém subpassos e saída próxima, sem deslocamento automático.
+- Diagnóstico mostra origem do bloqueio, amostras/apoio local da sonda, custo, idade da confirmação e cobertura insuficiente. Apoio local não representa precisão do sensor.
+- Fixtures geométricas e sessões XR simuladas cobrem mapa parcial, persistência lateral, liberação confiável, recuo, deslizamento, fallback e limpeza; benchmark mede separadamente sonda, mapa e consulta final.
+- Cache `ar-play-v1.1.1` e inventários públicos atualizados. Baseline 1.1.0 preservada no histórico; sem dependências de execução, alterações de modelos ou homologação física antecipada.
+
 ## 1.1.0 — 2026-11-25
 
 - Colisões reais experimentais no modo AR, desligadas por padrão e independentes do painel de diagnóstico.
