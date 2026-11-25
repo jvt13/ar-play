@@ -10,7 +10,7 @@ export class SpatialDebug {
       {color:[.1,1,.2,1],points:true}, {color:[1,.9,.1,1],points:true},
       {color:[1,.1,.1,1]}, {color:[1,.45,.05,1]},
       {color:[.15,.5,1,1]}, {color:[.5,.7,.8,1]},
-      {color:[.9,.1,1,1]}, {color:[.1,1,1,1]},
+      {color:[.9,.1,1,1],overlay:true}, {color:[.1,1,1,1],overlay:true},
       {color:[.55,.55,.55,1],points:true},
     ];
     this.clear();
@@ -93,9 +93,9 @@ export class SpatialDebug {
     this.end();
     const e=s.eventCount?s.events[(s.eventCursor+31)%32]:null;
     this.begin(6);
-    if(e && time-e.time<1000)this.line(e.previousX,v.ground+.02,e.previousZ,e.wantedX,v.ground+.02,e.wantedZ);
+    if(e && time-e.time<1000)this.line(e.previousX,e.previousY,e.previousZ,e.wantedX,e.wantedY,e.wantedZ);
     this.end();this.begin(7);
-    if(e && time-e.time<1000)this.line(e.previousX,v.ground+.02,e.previousZ,e.finalX,v.ground+.02,e.finalZ);
+    if(e && time-e.time<1000)this.line(e.previousX,e.previousY,e.previousZ,e.finalX,e.finalY,e.finalZ);
     this.end();this.begin(8);
     // These real reconstructed endpoints also feed free-ray carving, even when outside
     // the character's obstacle band. Show them separately so rejection is diagnosable.

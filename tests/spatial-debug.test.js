@@ -37,3 +37,15 @@ test('debug respects evidence expiration and explicit geometry limits',()=>{
   debug.prepare(s,6000);assert.equal(debug.cellCount,0);
   s.stop();debug.prepare(s,6100);assert.equal(debug.enabled,false);
 });
+
+test('movement vectors start at the recorded logical position without a graphic height offset',()=>{
+  const debug=new SpatialDebug({releaseDebug(){},drawDebug(){}},()=>0),s=new ARCollisions({}, {},()=>0);
+  const p=[.1,-1.4,-.3];s.start('waiting');s.place(p);s.setCharacter('bip',.63,p);s.setEnabled(true);s.frame(300,true);
+  s.move(p,.02,-.01,300);s.debug3D=true;debug.prepare(s,300);
+  for(const index of [6,7]){
+    const first=debug.groups[index].first*6;
+    assert.ok(Math.abs(debug.data[first]-.1)<1e-6);
+    assert.ok(Math.abs(debug.data[first+1]+1.4)<1e-6);
+    assert.ok(Math.abs(debug.data[first+2]+.3)<1e-6);
+  }
+});

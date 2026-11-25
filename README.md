@@ -40,7 +40,7 @@ A câmera, renderização e gravação são processadas localmente. O app não e
 
 ## Testes
 
-`npm test`: 83 testes, incluindo reconstrução 3D, projeções assimétricas, chão, confirmação/expiração, cobertura desconhecida, paredes/móveis, posições efetivas, recuo, deslizamento, escala e limpeza. A correção 1.1.1 acrescenta bloqueio imediato com mapa parcial, persistência lateral, liberação confiável, limites geométricos do contato e saída de sobreposição. A expiração de ocupação descarta votos livres fracos anteriores e retorna a desconhecido. O cache atual é `ar-play-v1.1.3`. `npm run check` valida a sintaxe JavaScript. Geometria e sessões automatizadas são sintéticas; a suíte de navegador também verifica a integração XR simulada, a sonda com diagnóstico fechado e a preservação dos modos existentes.
+`npm test`: 84 testes, incluindo reconstrução 3D, projeções assimétricas, chão, confirmação/expiração, cobertura desconhecida, paredes/móveis, posições efetivas, recuo, deslizamento, escala e limpeza. A correção 1.1.1 acrescenta bloqueio imediato com mapa parcial, persistência lateral, liberação confiável, limites geométricos do contato e saída de sobreposição. A expiração de ocupação descarta votos livres fracos anteriores e retorna a desconhecido. O cache atual é `ar-play-v1.1.3-r2`. `npm run check` valida a sintaxe JavaScript. Geometria e sessões automatizadas são sintéticas; a suíte de navegador também verifica a integração XR simulada, a sonda com diagnóstico fechado e a preservação dos modos existentes.
 
 Benchmark CPU opcional: `node tests/spatial_benchmark.mjs`. Usa geometria sintética, informa ambiente, mediana, p95 e máximos; não mede sensor, câmera ou desempenho no celular.
 
@@ -159,3 +159,5 @@ Para futuras versões do aplicativo, altere a versão em `package.json` e o iden
 As validações físicas anteriores não homologam as colisões experimentais da 1.1.1. Sem máscaras faciais, reconhecimento corporal, oclusão real, subida em objetos, multiplayer, áudio ou biblioteca de modelos externos. A qualidade visual é simplificada. Não há APK. Se o requisito central for gravar a AR espacial com áudio, o próximo passo recomendado é avaliar aplicativo nativo Kotlin + ARCore com composição explícita da imagem da câmera e do render 3D; isso deve ser validado no hardware antes de escolher o pipeline definitivo.
 
 Referências: https://developers.google.com/ar/develop/webxr/requirements ; https://developers.google.com/ar/develop/webxr/arcore-comparison ; https://developers.google.com/ar/devices ; https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/captureStream ; https://developer.mozilla.org/en-US/docs/Web/API/MediaRecorder .
+
+Os vetores de movimento usam as posições lógicas registradas, sem deslocamento gráfico de altura. São anotações desenhadas sobre as malhas virtuais para continuarem visíveis, usando a mesma projeção; não alteram o contato nem representam oclusão física.
