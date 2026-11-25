@@ -1,0 +1,14 @@
+{
+  "name": "ar-play",
+  "version": "1.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test tests/*.test.js",
+    "check": "node --check sw.js && node --check src/app.js && node --check src/engine.js && node --check src/math.js && node --check server.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
