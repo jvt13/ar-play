@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.4 — 2026-11-25
+
+- Memória de ocupação adaptativa por sessão: candidatas, confirmadas, consolidadas e aguardando revalidação; retenção consolidada de 45 s e expiração para desconhecido.
+- Revalidação dirigida limitada, compartilhando aquisição CPU existente, com evidência temporal para superfícies removidas/deslocadas e preservação diante de oclusão/dados inválidos.
+- Limpeza dos contatos derivados da sonda correspondentes a células liberadas; colisão individual, recuo, deslizamento e proteção contra cruzamento preservados.
+- Manutenção parcelada, descarte controlado em saturação e limites de 4096 ocupadas/candidatas e 8192 livres mantidos.
+- Mapeamento guiado opcional sem perda do mapa ao concluir; cores 3D e diagnóstico de memória, idade, origem temporal e custos.
+- Fixtures temporais completas, testes e benchmark de memória; cache ar-play-v1.1.4 com src/revalidation.js. Sem dependências de execução; homologação física pendente.
+
 ## 1.1.3 — 2026-11-25
 
 - Auditoria matemática direcionada com fixtures independentes de profundidade axial, UV, projeção assimétrica, rotação/inclinação, controle, pés e apoio fora de Y=0.

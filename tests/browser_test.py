@@ -37,14 +37,14 @@ if not base_url:
  base_url=f'http://localhost:{server.server_port}/ar-play/'
 base_url=base_url.rstrip('/')+'/'
 try:
- resources={'':'text/html','index.html':'text/html','style.css':'text/css','manifest.webmanifest':'application/manifest+json','sw.js':'javascript','src/app.js':'javascript','src/depth.js':'javascript','src/spatial-map.js':'javascript','src/collision.js':'javascript','src/movement-probe.js':'javascript','src/volume.js':'javascript','src/spatial-debug.js':'javascript','src/math.js':'javascript','src/engine.js':'javascript','icons/icon-192.png':'image/png','icons/icon-512.png':'image/png'}
+ resources={'':'text/html','index.html':'text/html','style.css':'text/css','manifest.webmanifest':'application/manifest+json','sw.js':'javascript','src/app.js':'javascript','src/depth.js':'javascript','src/spatial-map.js':'javascript','src/collision.js':'javascript','src/movement-probe.js':'javascript','src/volume.js':'javascript','src/spatial-debug.js':'javascript','src/revalidation.js':'javascript','src/math.js':'javascript','src/engine.js':'javascript','icons/icon-192.png':'image/png','icons/icon-512.png':'image/png'}
  for name,mime in resources.items():
   with urlopen(base_url+name,timeout=30) as response:
    assert response.status==200,(name,response.status)
    assert mime in response.headers.get('Content-Type',''),(name,response.headers)
    assert response.read(),name
- print('PASS HTTP 200 and MIME types for all 16 public routes',base_url)
- for name in ['server.mjs','package.json','tests/browser_test.py','tests/app.test.js','tests/depth.test.js','tests/spatial.test.js','tests/collision.test.js','tests/hybrid.test.js','tests/refinement.test.js','tests/directional.test.js','tests/spatial-debug.test.js','tests/spatial_benchmark.mjs','tests/xr_fixture.js','reports/report.md','reports/','README.md','CHANGELOG.md','TESTES.txt','iniciar.bat','.github/workflows/deploy-pages.yml','.git/config','.env']:
+ print('PASS HTTP 200 and MIME types for all 17 public routes',base_url)
+ for name in ['server.mjs','package.json','tests/browser_test.py','tests/app.test.js','tests/depth.test.js','tests/spatial.test.js','tests/collision.test.js','tests/hybrid.test.js','tests/refinement.test.js','tests/directional.test.js','tests/spatial-debug.test.js','tests/memory.test.js','tests/memory_benchmark.mjs','tests/spatial_benchmark.mjs','tests/xr_fixture.js','reports/report.md','reports/','README.md','CHANGELOG.md','TESTES.txt','iniciar.bat','.github/workflows/deploy-pages.yml','.git/config','.env']:
   try:
    with urlopen(base_url+name,timeout=30) as response:raise AssertionError(f'Private file exposed: {name} ({response.status})')
   except HTTPError as error:assert error.code==404,(name,error.code)
@@ -89,7 +89,7 @@ try:
   cache=re.search(r"const CACHE='([^']+)'",(ROOT/'sw.js').read_text(encoding='utf-8')).group(1)
   assert re.fullmatch(r'ar-play-v'+re.escape(version)+r'(-r[1-9][0-9]*)?',cache),cache
   assert page.evaluate('caches.keys()')==[cache]
-  assert page.evaluate('(async () => (await (await caches.open("'+cache+'")).keys()).length)()')==15
+  assert page.evaluate('(async () => (await (await caches.open("'+cache+'")).keys()).length)()')==16
   print('PASS service worker scope and versioned cache')
   context.set_offline(True);page.reload();page.wait_for_function('window.__arplay?.state().frameCount > 2');print('PASS offline reload')
   for char in ['nori','luma','bip']:
@@ -178,8 +178,8 @@ try:
   stats=ar.evaluate('window.__arplay.spatialDebug()');assert stats['vertices']<=6000 and stats['cells']<=64
   assert stats['candidates']>0 and stats['cpuBytes']==144000,stats
   assert ar.evaluate('window.__arplay.glError()')==0
-  pixel_check="""() => {const canvas=document.querySelector('#gl'),g=canvas.getContext('webgl'),data=new Uint8Array(canvas.width*canvas.height*4);g.readPixels(0,0,canvas.width,canvas.height,g.RGBA,g.UNSIGNED_BYTE,data);let red=0,blue=0,sumX=0;for(let i=0;i<data.length;i+=4){if(data[i]>220&&data[i+1]<60&&data[i+2]<60)red++;if(data[i]<80&&data[i+1]>80&&data[i+1]<170&&data[i+2]>240){blue++;sumX+=(i/4)%canvas.width;}}return {red,blue,blueX:blue?sumX/blue:null};}"""
-  before_pixels=ar.evaluate(pixel_check);assert before_pixels['red']>0 and before_pixels['blue']>0,before_pixels
+  pixel_check="""() => {const canvas=document.querySelector('#gl'),g=canvas.getContext('webgl'),data=new Uint8Array(canvas.width*canvas.height*4);g.readPixels(0,0,canvas.width,canvas.height,g.RGBA,g.UNSIGNED_BYTE,data);let red=0,blue=0,occupied=0,sumX=0;for(let i=0;i<data.length;i+=4){if(data[i]>220&&data[i+1]<60&&data[i+2]<60)red++;if((data[i]>220&&data[i+1]<60&&data[i+2]<60)||(data[i]>160&&data[i+1]<100&&data[i+2]>240)||(data[i]>240&&data[i+1]<110&&data[i+2]>150))occupied++;if(data[i]<80&&data[i+1]>80&&data[i+1]<170&&data[i+2]>240){blue++;sumX+=(i/4)%canvas.width;}}return {red,occupied,blue,blueX:blue?sumX/blue:null};}"""
+  before_pixels=ar.evaluate(pixel_check);assert before_pixels['occupied']>0 and before_pixels['blue']>0,before_pixels
   ar.evaluate('window.__xrTest.cameraX=.12');ar.wait_for_timeout(350)
   after_pixels=ar.evaluate(pixel_check);assert after_pixels['blue']>0 and after_pixels['blueX']<before_pixels['blueX']-3,(before_pixels,after_pixels)
   ar.evaluate('window.__xrTest.cameraX=0');ar.wait_for_timeout(200)
@@ -234,6 +234,36 @@ try:
   hybrid.locator('#collisionToggle').uncheck();assert hybrid.evaluate('window.__arplay.spatial().probeSamples')==0
   hybrid.locator('#demo').click();assert not hybrid_errors,hybrid_errors;hybrid.close()
   print('PASS SIMULATED hybrid immediate probe: partial map, limited coverage, actual stop/retreat, closed diagnosis and cleanup')
+  memory=simulated.new_page();memory_errors=[];memory.on('pageerror',lambda error:memory_errors.append(str(error)))
+  memory.goto(base_url+'?test=1');memory.wait_for_function('window.__arplay?.state().frameCount > 3')
+  memory.evaluate('Object.assign(window.__xrTest,{spatial:true,highResolution:true})');memory.locator('#ar').click()
+  memory.wait_for_function('window.__xrTest.hitReady');memory.evaluate('window.__xrTest.place()')
+  memory.locator('#collisionToggle').check();memory.locator('#depthToggle').click()
+  memory.locator('#mappingToggle').click();assert memory.evaluate('window.__arplay.spatial().guided') is True
+  origin=memory.evaluate('window.__arplay.state().pos')
+  memory.locator('#joystick').focus();memory.keyboard.down('ArrowUp');memory.wait_for_timeout(400);memory.keyboard.up('ArrowUp')
+  assert memory.evaluate('window.__arplay.state().pos')==origin
+  memory.wait_for_function('window.__arplay.spatial().memory.consolidated > 0',timeout=25000)
+  assert memory.locator('#mappingReadout').is_visible()
+  memory.locator('#mappingToggle').click();assert memory.evaluate('window.__arplay.spatial().guided') is False
+  assert memory.evaluate('window.__arplay.spatial().memory.consolidated')>0
+  memory.evaluate('window.__xrTest.cameraYaw=Math.PI');memory.wait_for_timeout(6200)
+  assert memory.evaluate('window.__arplay.spatial().memory.oldestAgeMs')>5000
+  assert memory.evaluate('window.__arplay.spatial().memory.consolidated')>0
+  memory.evaluate('window.__xrTest.cameraYaw=0;window.__xrTest.maxDepthReads=window.__xrTest.reads')
+  memory.locator('#joystick').focus();memory.keyboard.down('ArrowUp')
+  memory.wait_for_function('window.__arplay.spatial().blocked',timeout=15000);memory.keyboard.up('ArrowUp')
+  stopped=memory.evaluate('window.__arplay.state().pos');assert stopped[2]>-1.8
+  memory.evaluate('Object.assign(window.__xrTest,{maxDepthReads:0,depthMeters:4})')
+  memory.wait_for_function('window.__arplay.spatial().memory.released > 0',timeout=25000)
+  memory.locator('#joystick').focus();memory.keyboard.down('ArrowUp')
+  memory.wait_for_function('window.__arplay.state().pos[2] < -2.1',timeout=15000);memory.keyboard.up('ArrowUp')
+  memory.evaluate("Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async text=>{window.__memoryDiagnostic=JSON.parse(text)}}})")
+  memory.locator('#copyDiagnostic').click();memory.wait_for_function('window.__memoryDiagnostic?.lastBlock !== null')
+  assert memory.evaluate('window.__memoryDiagnostic.state.memory.released')>0
+  memory.locator('#collisionToggle').uncheck();assert memory.evaluate('window.__arplay.spatial().memory.confirmed')==0
+  memory.locator('#demo').click();assert not memory_errors,memory_errors;memory.close()
+  print('PASS SIMULATED adaptive memory: guided mapping, camera turn, retention >5s, collision, removal and released movement')
   simulated.close();browser.close()
 finally:
  if server:server.shutdown();server.server_close()

@@ -1,6 +1,19 @@
 import {radiusAt} from './volume.js';
 // Bounded, movement-directed depth evidence. Only derived world points survive XRFrame.
 // Evidence strength counts supporting samples; it is NOT a sensor confidence/precision score.
+export function projectWorld(x,y,z,pose,projection,out) {
+    const dx = x - pose[12], dy = y - pose[13], dz = z - pose[14];
+    const cx = pose[0] * dx + pose[1] * dy + pose[2] * dz;
+    const cy = pose[4] * dx + pose[5] * dy + pose[6] * dz;
+    const cz = pose[8] * dx + pose[9] * dy + pose[10] * dz;
+    const w = projection[3] * cx + projection[7] * cy + projection[11] * cz + projection[15];
+    if (cz >= -.15 || w <= 0) return false;
+    out[0] = ((projection[0] * cx + projection[4] * cy + projection[8] * cz + projection[12]) / w + 1) / 2;
+    out[1] = (1 - (projection[1] * cx + projection[5] * cy + projection[9] * cz + projection[13]) / w) / 2;
+    out[2]=-cz;
+    return out[0] >= 0 && out[0] <= 1 && out[1] >= 0 && out[1] <= 1;
+}
+
 export class MovementProbe {
   constructor(config) {
     this.config = config;
@@ -21,15 +34,7 @@ export class MovementProbe {
   }
   // Rigid inverse pose, followed by the actual (possibly asymmetric) view projection.
   project(x, y, z, pose, projection, out) {
-    const dx = x - pose[12], dy = y - pose[13], dz = z - pose[14];
-    const cx = pose[0] * dx + pose[1] * dy + pose[2] * dz;
-    const cy = pose[4] * dx + pose[5] * dy + pose[6] * dz;
-    const cz = pose[8] * dx + pose[9] * dy + pose[10] * dz;
-    const w = projection[3] * cx + projection[7] * cy + projection[11] * cz + projection[15];
-    if (cz >= -.15 || w <= 0) return false;
-    out[0] = ((projection[0] * cx + projection[4] * cy + projection[8] * cz + projection[12]) / w + 1) / 2;
-    out[1] = (1 - (projection[1] * cx + projection[5] * cy + projection[9] * cz + projection[13]) / w) / 2;
-    return out[0] >= 0 && out[0] <= 1 && out[1] >= 0 && out[1] <= 1;
+    return projectWorld(x,y,z,pose,projection,out);
   }
   update(time, reader, projector, projection, position, volume, dx, dz, map) {
     this.acquiredTime = this.lastUpdate = time; this.used = this.tested = this.valid = this.support = 0;
@@ -103,6 +108,15 @@ export class MovementProbe {
       this.lastConfirmation = time;
     }
     this.inactiveReason = this.used ? 'evidencia' : !this.projected ? 'fora da vista' : !this.valid ? 'dados inválidos' : this.inRegionCount < 3 ? 'rejeição geométrica' : 'evidência insuficiente';
+  }
+  invalidateCell(cell,origin,size) {
+    // Only derived contacts whose centre belongs to the released voxel are obsolete.
+    // Other independently observed contacts, including neighbours, remain untouched.
+    for(let i=this.count-1;i>=0;i--){
+      const j=i*7;
+      if(Math.floor((this.history[j]-origin[0])/size)!==cell.ix || Math.floor((this.history[j+1]-origin[1])/size)!==cell.iy || Math.floor((this.history[j+2]-origin[2])/size)!==cell.iz)continue;
+      this.count--;if(i!==this.count)this.history.copyWithin(j,this.count*7,this.count*7+7);this.history.fill(0,this.count*7,this.count*7+7);
+    }
   }
   allowsMove(x,z,nx,nz,volume,time,skin,escape=false) {
     this.motion=true;this.fromX=x;this.fromZ=z;this.escape=escape;this.motionAllowed=true;this.motionReason=null;this.motionBefore=this.motionAfter=this.motionDistance=null;

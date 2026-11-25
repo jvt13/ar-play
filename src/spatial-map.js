@@ -5,6 +5,8 @@ export const SPATIAL_CONFIG = Object.freeze({
   cellSize: .12, radius: 3, floorTolerance: .06, ttl: 5000, candidateTtl: 1000,
   freeTtl: 1500, confirmations: 3, freeConfirmations: 4, occupiedHold: 750, pointMargin: .025, maxCells: 4096,
   maxFreeCells: 8192, maxRaySteps: 96, surfaceMargin: .18,
+  consolidatedTtl: 45000, consolidationUpdates: 8, consolidationSpan: 1500,
+  independentInterval: 80, revalidateAfter: 5000, freeSpan: 300, contraryWindow: 2000,
 });
 const finiteMatrix = m => m?.length === 16 && m.every(Number.isFinite);
 const matches = (a, b) => a.every((v, i) => Math.abs(v - b[i]) < 1e-4);
@@ -64,8 +66,12 @@ export class SpatialMap {
       Number.isInteger(c.maxRaySteps) && c.maxRaySteps > 0 && c.maxRaySteps <= 256 &&
       Number.isInteger(c.confirmations) && c.confirmations >= 2 && Number.isInteger(c.freeConfirmations) && c.freeConfirmations >= 2 &&
       c.floorTolerance >= 0 && c.floorTolerance < .25 && c.candidateTtl > 0 && c.freeTtl > 0 &&
+      c.consolidatedTtl >= c.ttl && c.consolidatedTtl <= 60000 &&
+      Number.isInteger(c.consolidationUpdates) && c.consolidationUpdates >= 4 && c.consolidationSpan >= 500 &&
+      c.independentInterval >= 50 && c.revalidateAfter > 0 && c.freeSpan >= 200 && c.contraryWindow >= c.freeSpan &&
       c.occupiedHold >= 0 && c.occupiedHold <= c.ttl && c.pointMargin >= 0 && c.pointMargin <= .06)) throw new Error('Invalid spatial limits');
     this.cells = new Map(); this.free = new Map(); this.origin = new Float64Array(3); this.normal = new Float64Array(3);
+    this.released = new Float64Array(32*5);
     this.clear();
   }
   clear(origin = null, normal = null) {
@@ -73,47 +79,116 @@ export class SpatialMap {
     this.origin.fill(0); if (origin) this.origin.set(origin);
     this.normal.fill(0); this.normal[1] = 1; if (normal) this.normal.set(normal);
     this.ready = !!origin; this.batch = 0; this.saturated = false;
+    this.cellCursor=this.freeCursor=this.evictionCursor=null;this.lastMaintenance=-Infinity;
+    this.expiredCount=this.releasedCount=this.evictedCount=this.rejectedCount=this.occludedCount=this.revalidatedCount=0;
+    this.createdCount=0;this.evictionChecks=0;this.releaseCursor=this.releaseCount=0;this.released.fill(0);this.maintenanceMs=null;
+    this.statsAt=-Infinity;this.statsCache=null;this.camera=null;
   }
   key(ix, iy, iz) {
     if (ix < -32768 || ix > 32767 || iz < -32768 || iz > 32767 || iy < -128 || iy > 127) return -1;
     return (ix + 32768) * 16777216 + (iz + 32768) * 256 + iy + 128;
   }
-  begin(time, position, height) {
+  begin(time, position, height, camera = null) {
     this.time = time; this.batch++; this.centerX = position[0]; this.centerZ = position[2]; this.height = height;
-    this.saturated = false; this.expire(time);
+    this.evictionChecks=0;this.saturated = false; this.camera=camera; this.maintain(time);
   }
-  expire(time) {
-    const c = this.config;
-    for (const cell of this.cells.values()) if (time - cell.time >= (cell.confirmed ? c.ttl : c.candidateTtl)) {
-      if (cell.confirmed) {
-        this.occupiedCount--;
-        // Weak rays accumulated while occupied cannot become clearance just because time passed.
-        this.free.delete(cell.key);
-      }
-      this.cells.delete(cell.key);
+  retention(cell) { return cell.confirmed ? cell.consolidated ? this.config.consolidatedTtl : this.config.ttl : this.config.candidateTtl; }
+  valid(cell,time) { return !!cell && time-cell.time<this.retention(cell); }
+  memoryState(cell,time) {
+    if(!this.valid(cell,time))return 'unknown';
+    if(!cell.confirmed)return 'candidate';
+    if(cell.freeHits || cell.consolidated&&time-cell.time>=this.config.revalidateAfter)return 'revalidating';
+    return cell.consolidated?'consolidated':'confirmed';
+  }
+  remove(cell,reason) {
+    if(!this.cells.delete(cell.key))return;
+    if(cell.confirmed)this.occupiedCount--;
+    this.statsAt=-Infinity;
+    if(reason==='free') {
+      this.releasedCount++;
+      const j=this.releaseCursor*5;
+      this.released[j]=(cell.minX+cell.maxX)/2;this.released[j+1]=(cell.minY+cell.maxY)/2;this.released[j+2]=(cell.minZ+cell.maxZ)/2;this.released[j+3]=this.time;this.released[j+4]=cell.key;
+      this.releaseCursor=(this.releaseCursor+1)%32;this.releaseCount=Math.min(32,this.releaseCount+1);
+      this.onRelease?.(cell);
+    } else {this.free.delete(cell.key);if(reason==='expired')this.expiredCount++;else this.evictedCount++;}
+  }
+  expire(time,limit=Infinity) {
+    const n=Math.min(this.cells.size,limit);
+    for(let i=0;i<n;i++){
+      this.cellCursor ||= this.cells.values();let next=this.cellCursor.next();
+      if(next.done){this.cellCursor=this.cells.values();next=this.cellCursor.next();}
+      const cell=next.value;if(!cell)break;
+      if(!this.valid(cell,time))this.remove(cell,'expired');
     }
-    for (const cell of this.free.values()) if (time - cell.time >= c.freeTtl) this.free.delete(cell.key);
+    const k=Math.min(this.free.size,limit===Infinity?Infinity:limit*2);
+    for(let i=0;i<k;i++){
+      this.freeCursor ||= this.free.values();let next=this.freeCursor.next();
+      if(next.done){this.freeCursor=this.free.values();next=this.freeCursor.next();}
+      if(!next.value)break;
+      if(time-next.value.time>=this.config.freeTtl)this.free.delete(next.value.key);
+    }
+  }
+  maintain(time) {
+    if(time-this.lastMaintenance<125)return;
+    const started=performance.now();this.lastMaintenance=time;this.expire(time,128);this.maintenanceMs=performance.now()-started;
+  }
+  makeRoom() {
+    if(this.cells.size<this.config.maxCells)return true;
+    this.saturated=true;let victim=null,lowest=1;
+    for(let i=0,n=Math.min(64,this.cells.size,256-this.evictionChecks);i<n;i++){
+      this.evictionChecks++;
+      this.evictionCursor ||= this.cells.values();let next=this.evictionCursor.next();
+      if(next.done){this.evictionCursor=this.cells.values();next=this.evictionCursor.next();}
+      const cell=next.value;if(!cell)break;if(cell.batch===this.batch)continue;
+      const distance=Math.hypot((cell.minX+cell.maxX)/2-this.centerX,(cell.minZ+cell.maxZ)/2-this.centerZ);
+      const age=Math.max(0,this.time-cell.time),score=!this.valid(cell,this.time)?-10:distance>this.config.radius?-2+(cell.consolidated?.2:0):(cell.consolidated?4:cell.confirmed?2:0)+1-distance/this.config.radius-age/this.retention(cell);
+      if(score<lowest){lowest=score;victim=cell;}
+    }
+    if(victim){this.remove(victim,'capacity');return true;}
+    this.rejectedCount++;return false;
+  }
+  stats(time) {
+    if(this.statsCache&&time-this.statsAt<250)return this.statsCache;
+    const out=this.statsCache ||= {};let candidates=0,confirmed=0,consolidated=0,awaiting=0,occluded=0,oldest=0,maxViewpointSpan=0;
+    for(const cell of this.cells.values()){
+      if(!this.valid(cell,time))continue;
+      if(!cell.confirmed){candidates++;continue;}
+      confirmed++;maxViewpointSpan=Math.max(maxViewpointSpan,cell.viewpointSpan);if(cell.consolidated)consolidated++;if(this.memoryState(cell,time)==='revalidating')awaiting++;
+      if(cell.visibility==='occluded')occluded++;oldest=Math.max(oldest,time-cell.time);
+    }
+    Object.assign(out,{candidates,confirmed,consolidated,awaiting,occluded,maxViewpointSpan,oldestAgeMs:confirmed?oldest:null,revalidated:this.revalidatedCount,released:this.releasedCount,expired:this.expiredCount,evicted:this.evictedCount,rejected:this.rejectedCount,occlusionObservations:this.occludedCount,saturated:this.saturated,maintenanceMs:this.maintenanceMs});
+    this.statsAt=time;return out;
   }
   inRegion(x, y, z) {
     return this.ready && (x - this.centerX) ** 2 + (z - this.centerZ) ** 2 <= this.config.radius ** 2 &&
       y > this.origin[1] && y <= this.origin[1] + this.height &&
       (x - this.origin[0]) * this.normal[0] + (y - this.origin[1]) * this.normal[1] + (z - this.origin[2]) * this.normal[2] > this.config.floorTolerance;
   }
-  observe(x, y, z) {
-    if (!Number.isFinite(x + y + z) || !this.inRegion(x, y, z)) return false;
+  observe(x, y, z, retained = false) {
+    if (!Number.isFinite(x + y + z)) return false;
     const s = this.config.cellSize, o = this.origin;
     const ix = Math.floor((x - o[0]) / s), iy = Math.floor((y - o[1]) / s), iz = Math.floor((z - o[2]) / s), key = this.key(ix, iy, iz);
     if (key < 0) return false;
     let cell = this.cells.get(key);
+    if(!this.inRegion(x,y,z) && !(retained && cell?.confirmed && this.valid(cell,this.time)))return false;
+    if(cell&&!this.valid(cell,this.time)){this.remove(cell,'expired');cell=null;}
     if (!cell) {
-      if (this.cells.size >= this.config.maxCells) { this.saturated = true; return false; }
+      if (!this.makeRoom()) return false;
       cell = {key, ix, iy, iz, firstX:x, firstZ:z, tangentX:0, tangentZ:0, span:0, planar:true, minX: x, maxX: x, minY: y, maxY: y, minZ: z, maxZ: z,
-        hits: 0, time: this.time, batch: -1, confirmed: false, freeHits: 0, freeBatch: -1};
-      this.cells.set(key, cell);
+        hits: 0, time: this.time, firstSeen: this.time, lastIndependent:-Infinity, observations:0, consistentUpdates:0, consolidated:false, viewpointSpan:0, cameraX:this.camera?.[12]??null, cameraY:this.camera?.[13]??null, cameraZ:this.camera?.[14]??null, visibility:null, lastCheck:-Infinity, firstFree:0, lastFree:-Infinity, batch: -1, confirmed: false, freeHits: 0, freeBatch: -1};
+      this.cells.set(key, cell);this.createdCount++;
     }
     if (cell.batch !== this.batch) {
       cell.hits = this.time - cell.time < this.config.candidateTtl ? Math.min(this.config.confirmations, cell.hits + 1) : 1;
-      cell.batch = this.batch; cell.time = this.time; cell.freeHits = 0;
+      if(this.time-cell.lastIndependent>=this.config.independentInterval){
+        const gap=Math.hypot(Math.max(cell.minX-x,0,x-cell.maxX),Math.max(cell.minY-y,0,y-cell.maxY),Math.max(cell.minZ-z,0,z-cell.maxZ));
+        cell.observations=Math.min(65535,cell.observations+1);cell.consistentUpdates=gap<=this.config.pointMargin?Math.min(65535,cell.consistentUpdates+1):1;cell.lastIndependent=this.time;
+      }
+      if(cell.confirmed && this.time>cell.time)this.revalidatedCount++;
+      cell.batch = this.batch; cell.time = this.time; cell.freeHits = 0;cell.lastFree=-Infinity;cell.visibility='observed';
+      if(this.camera && cell.cameraX!==null)cell.viewpointSpan=Math.max(cell.viewpointSpan,Math.hypot(this.camera[12]-cell.cameraX,this.camera[13]-cell.cameraY,this.camera[14]-cell.cameraZ));
+      if(cell.observations>=this.config.consolidationUpdates && cell.consistentUpdates>=6 && this.time-cell.firstSeen>=this.config.consolidationSpan)cell.consolidated=true;
+      this.statsAt=-Infinity;
       // Keep the observed envelope across viewpoints until this cell expires/is reliably cleared.
       if (!cell.confirmed && cell.hits >= this.config.confirmations) { cell.confirmed = true; this.occupiedCount++; }
     }
@@ -128,13 +203,13 @@ export class SpatialMap {
   }
   markFree(ix, iy, iz, reliable = false) {
     const c = this.config, s = c.cellSize, o = this.origin;
-    if (!this.inRegion(o[0] + (ix + .5) * s, o[1] + (iy + .5) * s, o[2] + (iz + .5) * s)) return;
     const key = this.key(ix, iy, iz); if (key < 0) return;
     const cell = this.cells.get(key);
+    if (!this.inRegion(o[0] + (ix + .5) * s, o[1] + (iy + .5) * s, o[2] + (iz + .5) * s) && !(reliable==='targeted' && cell?.confirmed && this.valid(cell,this.time))) return;
     if (cell?.batch === this.batch) return;
     let known = this.free.get(key);
     if (!known) {
-      if (this.free.size >= c.maxFreeCells) { this.saturated = true; return; }
+      if (this.free.size >= c.maxFreeCells) { this.saturated = true;this.free.delete(this.free.keys().next().value);this.evictedCount++; }
       known = {key, time: this.time, batch: -1, hits: 0}; this.free.set(key, known);
     }
     if (known.batch !== this.batch) {
@@ -142,15 +217,13 @@ export class SpatialMap {
     }
     // A grazing ray is weak evidence: it may cover empty space in an occupied voxel.
     // Only central, unobstructed observations after the hold period can erase occupancy.
-    if (cell && reliable && this.time - cell.time >= c.occupiedHold && cell.freeBatch !== this.batch) {
-      cell.freeHits = cell.freeBatch === this.batch - 1 ? cell.freeHits + 1 : 1;
-      cell.freeBatch = this.batch;
-      if (cell.freeHits >= c.freeConfirmations) {
-        if (cell.confirmed) this.occupiedCount--;
-        this.cells.delete(key);
-      }
+    if (cell && reliable && this.time-cell.time>=c.occupiedHold && cell.freeBatch!==this.batch && this.time-cell.lastFree>=c.independentInterval) {
+      if(this.time-cell.lastFree>c.contraryWindow || reliable!=='targeted' && cell.freeBatch!==this.batch-1){cell.freeHits=0;cell.firstFree=this.time;}
+      cell.freeHits++;cell.lastFree=this.time;cell.freeBatch=this.batch;cell.visibility='contradictory';this.statsAt=-Infinity;
+      if(cell.freeHits>=c.freeConfirmations && this.time-cell.firstFree>=c.freeSpan)this.remove(cell,'free');
     }
   }
+
   traceFree(cx, cy, cz, x, y, z) {
     const s = this.config.cellSize, o = this.origin;
     const length = Math.hypot(x - cx, y - cy, z - cz), limit = length - this.config.surfaceMargin;
@@ -181,7 +254,7 @@ export class SpatialMap {
     const s = this.config.cellSize, o = this.origin;
     const key = this.key(Math.floor((x - o[0]) / s), Math.floor((y - o[1]) / s), Math.floor((z - o[2]) / s));
     const cell = this.cells.get(key);
-    if (cell?.confirmed && time - cell.time < this.config.ttl) return 'occupied';
+    if (cell?.confirmed && this.valid(cell,time)) return 'occupied';
     const free = this.free.get(key);
     return free && free.hits >= this.config.freeConfirmations && time - free.time < this.config.freeTtl && !cell ? 'free' : 'unknown';
   }
@@ -204,7 +277,7 @@ export class SpatialMap {
     const c=this.config,s=c.cellSize,o=this.origin,ix=Math.floor((x-o[0])/s),iz=Math.floor((z-o[2])/s);
     for(let a=ix-1;a<=ix+1;a++)for(let b=iz-1;b<=iz+1;b++)for(let y=Math.floor((volume.ground+c.floorTolerance-o[1])/s);y<=Math.floor((volume.ground+volume.height-o[1])/s);y++){
       const cell=this.cells.get(this.key(a,y,b));
-      if(cell?.confirmed&&!cell.planar&&time-cell.time<c.ttl&&cell.maxX-cell.minX>1e-6&&cell.maxZ-cell.minZ>1e-6&&x>=cell.minX-1e-8&&x<=cell.maxX+1e-8&&z>=cell.minZ-1e-8&&z<=cell.maxZ+1e-8)return true;
+      if(cell?.confirmed&&!cell.planar&&this.valid(cell,time)&&cell.maxX-cell.minX>1e-6&&cell.maxZ-cell.minZ>1e-6&&x>=cell.minX-1e-8&&x<=cell.maxX+1e-8&&z>=cell.minZ-1e-8&&z<=cell.maxZ+1e-8)return true;
     }
     return false;
   }
@@ -222,7 +295,7 @@ export class SpatialMap {
       if (dx * dx + dz * dz >= r * r - 1e-10) continue;
       for (let iy = minY; iy <= maxY; iy++) {
         const cell = this.cells.get(this.key(ix, iy, iz));
-        if (cell?.confirmed && time - cell.time < c.ttl && cell.minY < volume.ground + volume.height && cell.maxY > volume.ground + c.floorTolerance) {
+        if (cell?.confirmed && this.valid(cell,time) && cell.minY < volume.ground + volume.height && cell.maxY > volume.ground + c.floorTolerance) {
           // Refine the broad-phase voxel with measured extents, avoiding up to 12 cm of artificial wall thickness.
           const ax = cell.minX - c.pointMargin, bx = cell.maxX + c.pointMargin;
           const az = cell.minZ - c.pointMargin, bz = cell.maxZ + c.pointMargin;

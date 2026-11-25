@@ -12,6 +12,7 @@ export class SpatialDebug {
       {color:[.15,.5,1,1]}, {color:[.5,.7,.8,1]},
       {color:[.9,.1,1,1],overlay:true}, {color:[.1,1,1,1],overlay:true},
       {color:[.55,.55,.55,1],points:true},
+      {color:[.7,.2,1,1]}, {color:[1,.3,.7,1]}, {color:[.5,1,.75,1],points:true},
     ];
     this.clear();
   }
@@ -56,8 +57,10 @@ export class SpatialDebug {
       if(m.inRegion(x,y,z)){this.vertex(x,y,z);this.candidateCount++;}
     }
     this.end();this.begin(2);
+    let inspected=0;
     for(const cell of m.cells.values()){
-      if(!cell.confirmed || time-cell.time>=c.ttl || cell.minY>=v.ground+v.height || cell.maxY<=v.ground+c.floorTolerance)continue;
+      if(inspected++>=256)break;
+      if(m.memoryState(cell,time)!=='confirmed' || cell.minY>=v.ground+v.height || cell.maxY<=v.ground+c.floorTolerance)continue;
       if(this.cellCount++>=64){this.cellCount=64;break;}
       this.box(cell.minX-c.pointMargin,cell.minY,cell.minZ-c.pointMargin,cell.maxX+c.pointMargin,cell.maxY,cell.maxZ+c.pointMargin);
     }
@@ -102,6 +105,22 @@ export class SpatialDebug {
     for(let i=0;i<s.used*3&&i<s.points.length;i+=3){
       const x=s.points[i],y=s.points[i+1],z=s.points[i+2],height=(x-o[0])*n[0]+(y-o[1])*n[1]+(z-o[2])*n[2];
       if(Math.abs(height)>c.floorTolerance&&!m.inRegion(x,y,z)){this.vertex(x,y,z);this.outsideCount++;}
+    }
+    this.end();
+    for(let index=9;index<=10;index++){
+      const state=index===9?'consolidated':'revalidating';
+      this.begin(index);inspected=0;
+      for(const cell of m.cells.values()){
+        if(inspected++>=256||this.cellCount>=64)break;
+        if(m.memoryState(cell,time)!==state||cell.minY>=v.ground+v.height||cell.maxY<=v.ground+c.floorTolerance)continue;
+        this.cellCount++;this.box(cell.minX-c.pointMargin,cell.minY,cell.minZ-c.pointMargin,cell.maxX+c.pointMargin,cell.maxY,cell.maxZ+c.pointMargin);
+      }
+      this.end();
+    }
+    this.begin(11);
+    for(let i=0;i<m.releaseCount;i++){
+      const j=i*5,x=m.released[j],y=m.released[j+1],z=m.released[j+2];
+      if(time-m.released[j+3]<1500&&m.stateAt(x,y,z,time)==='free')this.vertex(x,y,z);
     }
     this.end();this.buildMs=Math.max(0,this.now()-started);
   }

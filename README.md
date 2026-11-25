@@ -1,4 +1,4 @@
-# AR Play — v1.1.3 (MVP)
+# AR Play — v1.1.4 (MVP)
 
 Aplicativo web de personagens 3D interativos, inspirado na experiência de câmera com efeitos de realidade aumentada. Não é uma reprodução do TikTok. Os três personagens (Bip, Nori e Luma) são construídos proceduralmente, sem baixar modelos ou usar ativos proprietários.
 
@@ -40,13 +40,29 @@ A câmera, renderização e gravação são processadas localmente. O app não e
 
 ## Testes
 
-`npm test`: 84 testes, incluindo reconstrução 3D, projeções assimétricas, chão, confirmação/expiração, cobertura desconhecida, paredes/móveis, posições efetivas, recuo, deslizamento, escala e limpeza. A correção 1.1.1 acrescenta bloqueio imediato com mapa parcial, persistência lateral, liberação confiável, limites geométricos do contato e saída de sobreposição. A expiração de ocupação descarta votos livres fracos anteriores e retorna a desconhecido. O cache atual é `ar-play-v1.1.3-r2`. `npm run check` valida a sintaxe JavaScript. Geometria e sessões automatizadas são sintéticas; a suíte de navegador também verifica a integração XR simulada, a sonda com diagnóstico fechado e a preservação dos modos existentes.
+`npm test`: 105 testes, incluindo reconstrução 3D, projeções assimétricas, chão, confirmação/expiração, cobertura desconhecida, paredes/móveis, posições efetivas, recuo, deslizamento, escala e limpeza. A correção 1.1.1 acrescenta bloqueio imediato com mapa parcial, persistência lateral, liberação confiável, limites geométricos do contato e saída de sobreposição. A expiração de ocupação descarta votos livres fracos anteriores e retorna a desconhecido. O cache atual é `ar-play-v1.1.4`. `npm run check` valida a sintaxe JavaScript. Geometria e sessões automatizadas são sintéticas; a suíte de navegador também verifica a integração XR simulada, a sonda com diagnóstico fechado e a preservação dos modos existentes.
 
 Benchmark CPU opcional: `node tests/spatial_benchmark.mjs`. Usa geometria sintética, informa ambiente, mediana, p95 e máximos; não mede sensor, câmera ou desempenho no celular.
 
 Suíte de navegador: instale Python 3.12+, Playwright (`python -m pip install playwright==1.63.0`) e Chromium (`python -m playwright install chromium`). Execute `python tests/browser_test.py`. Ajuste a variável `CHROMIUM` com o caminho de um Chrome/Chromium instalado, se necessário. O teste usa câmera simulada e hospeda somente os arquivos públicos em um diretório temporário sob `/ar-play/`, com porta livre. `PREVIEW` permite salvar capturas; `BASE_URL` permite verificar a URL HTTPS publicada em vez do servidor temporário. Essas ferramentas são exclusivas de teste; o aplicativo continua sem dependências de execução. O WebXR real não é coberto por essa suíte.
 
 Câmera física, sensores, instalação no Android e ARCore exigem validação no aparelho. Os testes de navegador usam câmera simulada e não homologam WebXR/ARCore.
+
+## Memória espacial experimental — 1.1.4
+
+Colisões continuam opcionais e desligadas inicialmente. A memória vive somente na sessão AR: candidatas duram 1 s, confirmadas recentes 5 s e consolidadas até 45 s após a última observação válida, mesmo fora da vista. Consolidação exige 8 atualizações independentes, pelo menos 1,5 s e consistência geométrica. Pontuações/votos não são precisão certificada. Sem reobservação, a ocupação vence e retorna a desconhecido; desconhecido não comprova espaço livre e não é bloqueado indiscriminadamente.
+
+Quando a câmera retorna, consultas dirigidas ao centro medido verificam ocupações conhecidas. Leituras coerentes no mesmo local renovam a retenção. Profundidade válida além da superfície, em quatro atualizações distintas e pelo menos 300 ms, pode remover ocupação antes dos 45 s. Uma superfície mais próxima indica oclusão e preserva a memória anterior; dado ausente, isolado ou rasante não comprova remoção. O objeto deslocado é mapeado na nova posição e a antiga é liberada independentemente, sem reconhecimento semântico. A confirmação depende de visibilidade, resolução e dados utilizáveis; não há liberação instantânea garantida.
+
+Para observar o ambiente antes de caminhar, ative Colisões reais, abra Diagnóstico AR e toque em **Mapear ambiente**. Mova lentamente a câmera: o personagem fica parado, enquanto novas células candidatas e consistência são adquiridas. **Concluir mapeamento** libera os controles sem apagar o mapa. É opcional; o mapa também atualiza no uso normal. Não há percentual de cômodo completo.
+
+Na geometria 3D: vermelho indica confirmação recente; violeta, consolidação; rosa, ocupação aguardando revalidação; verde-claro, centros liberados por evidência livre recente. Demais cores e projeção permanecem as da 1.1.3. Visualização desativada inicialmente, com até 64 caixas, 32 centros liberados e 6000 vértices. Nem toda a memória cabe na visualização. Ocupações antigas continuam bloqueando enquanto válidas. Texto copiado inclui contagens, idades, revalidações/liberações, expiração, oclusão, saturação, custos, modo guiado e origem temporal do último bloqueio.
+
+Limites mantidos: 4096 células ocupadas/candidatas, 8192 livres; aquisição de novas regiões até 3 m do personagem. Revalidação examina até 256 posições locais e 96 entradas rotativas, escolhe até 8 alvos e consulta até 40 amostras por atualização. O orçamento reduz e recupera conforme custo; uma memória grande pode levar várias atualizações para ser revalidada por inteiro. Saturação prioriza ocupações consolidadas próximas e pode recusar novas entradas quando não existe candidato adequado a descarte. Manutenção é parcelada; células vencidas deixam de colidir imediatamente, ainda que a remoção da entrada esteja pendente.
+
+Desativar colisões, reposicionar, perder a validade do rastreamento/reference space ou encerrar AR limpa tudo. Não há salvamento em servidor, arquivos, IndexedDB ou outra sessão. O aplicativo não transmite a geometria. `node --expose-gc tests/memory_benchmark.mjs` mede operações sintéticas e heap aproximado em desktop; não mede precisão ou FPS Android.
+
+Homologação física da 1.1.4 pendente. Para validar: observar um móvel por alguns segundos, virar a câmera por mais de 5 s e retornar; verificar bloqueio conhecido. Retirar uma caixa segura e voltar a observá-la: a antiga região deve liberar após evidência suficiente. Repetir com objeto deslocado e com uma superfície mais próxima ocultando a anterior; oclusão não deve apagar a memória. Comparar com colisões desligadas, três personagens, 63%/100%, recuo/deslizamento e copiar diagnóstico após qualquer bloqueio incorreto. Sobreposição visual sem oclusão não comprova penetração física.
 
 ## Diagnóstico AR experimental — 1.0.2
 
