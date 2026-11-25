@@ -1,4 +1,4 @@
-# AR Play — v1.0.1 (MVP)
+# AR Play — v1.0.2 (MVP)
 
 Aplicativo web de personagens 3D interativos, inspirado na experiência de câmera com efeitos de realidade aumentada. Não é uma reprodução do TikTok. Os três personagens (Bip, Nori e Luma) são construídos proceduralmente, sem baixar modelos ou usar ativos proprietários.
 
@@ -26,6 +26,7 @@ Acesso via IP local por HTTP (por exemplo, http://192.168.x.x:8080) pode abrir a
 
 - `index.html`, `style.css`: UI responsiva mobile-first.
 - `src/app.js`: gerenciamento dos modos, WebXR, câmera, controles, captura, PWA.
+- `src/depth.js`: negociação opcional de profundidade e diagnóstico experimental em AR, sem física ou oclusão.
 - `src/engine.js`: WebGL 1, shaders, malhas procedurais, animações e iluminação direcional simples.
 - `src/math.js`: matrizes de transformação, projeção e utilitários.
 - `manifest.webmanifest`, `sw.js`, `icons/`: instalação PWA e cache offline dos arquivos após primeiro acesso.
@@ -36,11 +37,35 @@ A câmera, renderização e gravação são processadas localmente. O app não e
 
 ## Testes
 
-`npm test`: 10 testes, incluindo os oito originais e verificações de manifest, referências em subdiretório, cache offline e descarte de caches antigos. `npm run check` valida a sintaxe dos arquivos JavaScript da aplicação e do servidor local.
+`npm test`: 21 testes, incluindo os dez anteriores e testes direcionados de profundidade com dados e sessões simulados. Cobrem conversão, transformações, indisponibilidade, negociação/fallback, dados inválidos, diagnóstico, limite de leitura e limpeza. `npm run check` valida a sintaxe JavaScript, incluindo o módulo de profundidade.
 
 Suíte de navegador: instale Python 3.12+, Playwright (`python -m pip install playwright==1.63.0`) e Chromium (`python -m playwright install chromium`). Execute `python tests/browser_test.py`. Ajuste a variável `CHROMIUM` com o caminho de um Chrome/Chromium instalado, se necessário. O teste usa câmera simulada e hospeda somente os arquivos públicos em um diretório temporário sob `/ar-play/`, com porta livre. `PREVIEW` permite salvar capturas; `BASE_URL` permite verificar a URL HTTPS publicada em vez do servidor temporário. Essas ferramentas são exclusivas de teste; o aplicativo continua sem dependências de execução. O WebXR real não é coberto por essa suíte.
 
 Câmera física, sensores, instalação no Android e ARCore exigem validação no aparelho. Os testes de navegador usam câmera simulada e não homologam WebXR/ARCore.
+
+## Diagnóstico AR experimental — 1.0.2
+
+A baseline 1.0.1 recebeu 18/18 aprovações físicas na ARP-002, conforme informado pelo gestor. A profundidade da 1.0.2 ainda precisa de validação física própria.
+
+Entre em **AR espacial** e toque em **Diagnóstico AR**. O painel começa desligado em cada sessão e pode ser fechado sem sair de AR. Estúdio e Câmera mantêm seus controles e aparência. O painel mostra WebXR, sessão, acesso e formato concedidos, resolução real do mapa, profundidade central em metros, amostras válidas da vista e FPS XR estimado.
+
+- **Não suportado:** a API CPU não está exposta pelo navegador.
+- **Não concedido:** a sessão iniciou sem profundidade; isso não confirma falta de suporte do aparelho.
+- **Aguardando dados:** recurso concedido, mas sem mapa, rastreamento ou amostras válidas no momento.
+- **Dados disponíveis:** há amostras utilizáveis.
+- **Falha de leitura:** erro ou dados incompatíveis; a renderização AR continua e novas leituras podem recuperar o diagnóstico.
+
+O recurso `depth-sensing` é opcional, com acesso `cpu-optimized` e preferência por `luminance-alpha`/`float32`. Se uma implementação rejeitar a extensão por incompatibilidade, há uma tentativa com a configuração AR original. Falhas de permissão não são repetidas. Nenhuma API nativa Android é chamada e nenhum acesso GPU é solicitado.
+
+**Mapa de profundidade** é uma opção adicional: uma grade de 32×24 amostras da vista, com perto em claro, 5 m ou mais em escuro e pixels inválidos em preto. O limite de 5 m é apenas a escala visual. Sem mapa, a grade é 8×8. O percentual se refere às amostras consultadas, não a toda a imagem nem à confiança/precisão do sensor. A resolução exibida é a do buffer recebido. O centro mede profundidade em relação ao plano da câmera, não distância radial ou altura sobre o chão.
+
+As leituras, a transformação de coordenadas e a conversão para metros acontecem dentro do callback XR; buffers nativos não são mantidos entre frames. Indicadores e mapa atualizam no máximo a 4 Hz. Uma leitura acima de 8 ms reduz essa frequência para 1 Hz, indicada no painel. Desligar o diagnóstico interrompe as leituras JavaScript; o custo nativo do recurso negociado pode persistir até o fim da sessão e deve ser avaliado no aparelho. Não há logs contínuos, gravação ou envio de dados de profundidade.
+
+Para validar no celular: recarregue online após a atualização, abra AR com o diagnóstico desligado e confirme o funcionamento anterior. Ative o painel, registre aparelho/Chrome, estados, acesso, formato, resolução, centro, amostras, FPS e tempo de leitura. Aponte para uma parede aproximadamente perpendicular à câmera e compare o centro com distâncias de referência. Teste movimento lento, interrupção temporária do rastreamento, mapa ligado/desligado, fechamento do painel e nova sessão. Não interprete ausência de dados como medição zero. Repita os controles e capturas da baseline.
+
+Colisões, gravidade, subida em objetos e oclusão não estão implementadas. A versão funcional 1.0.1 permanece no histórico em `5b68c7b86453cbe6858492f4d0bc5a594e9cc7f6`; uma restauração deve usar um novo commit de reversão e o fluxo normal de publicação, sem force push.
+
+Referências: [WebXR versus ARCore](https://developers.google.com/ar/develop/webxr/arcore-comparison), [Depth do ARCore](https://developers.google.com/ar/develop/depth) e [WebXR Depth Sensing](https://www.w3.org/TR/webxr-depth-sensing-1/). A disponibilidade é confirmada pelas capacidades da sessão no navegador, sem presumir equivalência com as APIs nativas.
 
 ## Publicação
 
@@ -66,6 +91,6 @@ Para futuras versões do aplicativo, altere a versão em `package.json` e o iden
 
 ## Limitações e evolução
 
-Esta é uma primeira versão funcional implementada em código, não uma versão homologada. Sem máscaras faciais, reconhecimento corporal, oclusão real, colisões, multiplayer, áudio ou biblioteca de modelos externos. A qualidade visual é simplificada. Não há APK. Se o requisito central for gravar a AR espacial com áudio, o próximo passo recomendado é avaliar aplicativo nativo Kotlin + ARCore com composição explícita da imagem da câmera e do render 3D; isso deve ser validado no hardware antes de escolher o pipeline definitivo.
+A homologação física informada para a baseline 1.0.1 não homologa o diagnóstico experimental da 1.0.2. Sem máscaras faciais, reconhecimento corporal, oclusão real, colisões, multiplayer, áudio ou biblioteca de modelos externos. A qualidade visual é simplificada. Não há APK. Se o requisito central for gravar a AR espacial com áudio, o próximo passo recomendado é avaliar aplicativo nativo Kotlin + ARCore com composição explícita da imagem da câmera e do render 3D; isso deve ser validado no hardware antes de escolher o pipeline definitivo.
 
 Referências: https://developers.google.com/ar/develop/webxr/requirements ; https://developers.google.com/ar/develop/webxr/arcore-comparison ; https://developers.google.com/ar/devices ; https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/captureStream ; https://developer.mozilla.org/en-US/docs/Web/API/MediaRecorder .

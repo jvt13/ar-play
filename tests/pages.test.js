@@ -30,14 +30,14 @@ test('manifest, HTML, CSS and ES modules resolve inside /ar-play/', () => {
   }
   for (const match of read('index.html').matchAll(/(?:src|href)="([^"]+)"/g)) localReference(match[1]);
   for (const match of read('style.css').matchAll(/url\(['"]?([^)'"\s]+)['"]?\)/g)) localReference(match[1]);
-  for (const name of ['app', 'engine', 'math']) {
+  for (const name of ['app', 'engine', 'math', 'depth']) {
     const parent = new URL(`src/${name}.js`, base);
     for (const match of read(`src/${name}.js`).matchAll(/\bfrom\s*['"]([^'"]+)['"]/g)) localReference(match[1], parent);
   }
   // Registration resolves against the document, not the src/ module directory.
   assert.match(read('src/app.js'), /serviceWorker\.register\('\.\/sw\.js'\)/);
   assert.equal(new URL('./sw.js', base).pathname, '/ar-play/sw.js');
-  for (const file of ['index.html', 'style.css', 'manifest.webmanifest', 'sw.js', 'src/app.js', 'src/engine.js', 'src/math.js']) {
+  for (const file of ['index.html', 'style.css', 'manifest.webmanifest', 'sw.js', 'src/app.js', 'src/depth.js', 'src/engine.js', 'src/math.js']) {
     assert.doesNotMatch(read(file), /http:\/\//, `Mixed content in ${file}`);
   }
 });
@@ -65,7 +65,7 @@ test('service worker precaches public resources, removes obsolete caches and ser
           }
         }};
       },
-      keys: async () => ['ar-play-v1.0.0', current, 'another-app-cache'],
+      keys: async () => ['ar-play-v1.0.0', 'ar-play-v1.0.1', current, 'another-app-cache'],
       delete: async name => { removed.push(name); return true; },
       match: async request => stored.get(new URL(typeof request === 'string' ? request : request.url, base).href),
     },
@@ -83,9 +83,9 @@ test('service worker precaches public resources, removes obsolete caches and ser
   await lifecycle('install');
   assert.equal(opened, current);
   assert.ok(skipped);
-  assert.equal(stored.size, 9);
+  assert.equal(stored.size, 10);
   await lifecycle('activate');
-  assert.deepEqual(removed, ['ar-play-v1.0.0']);
+  assert.deepEqual(removed, ['ar-play-v1.0.0', 'ar-play-v1.0.1']);
   assert.ok(claimed);
   const request = (file, mode = 'cors', method = 'GET') => ({url: new URL(file, base).href, mode, method});
   async function response(req) {
@@ -96,7 +96,7 @@ test('service worker precaches public resources, removes obsolete caches and ser
   assert.ok((await response(request('./', 'navigate'))).network);
   networkFails = true;
   assert.equal((await response(request('./?test=1', 'navigate'))).url, new URL('index.html', base).href);
-  for (const file of ['style.css', 'src/app.js', 'src/engine.js', 'src/math.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png']) {
+  for (const file of ['style.css', 'src/app.js', 'src/depth.js', 'src/engine.js', 'src/math.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png']) {
     assert.ok((await response(request(file))).cached, `Offline resource missing: ${file}`);
   }
   assert.equal(await response(request('./', 'cors', 'POST')), undefined);

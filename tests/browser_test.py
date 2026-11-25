@@ -28,14 +28,14 @@ if not base_url:
  base_url=f'http://localhost:{server.server_port}/ar-play/'
 base_url=base_url.rstrip('/')+'/'
 try:
- resources={'':'text/html','index.html':'text/html','style.css':'text/css','manifest.webmanifest':'application/manifest+json','sw.js':'javascript','src/app.js':'javascript','src/math.js':'javascript','src/engine.js':'javascript','icons/icon-192.png':'image/png','icons/icon-512.png':'image/png'}
+ resources={'':'text/html','index.html':'text/html','style.css':'text/css','manifest.webmanifest':'application/manifest+json','sw.js':'javascript','src/app.js':'javascript','src/depth.js':'javascript','src/math.js':'javascript','src/engine.js':'javascript','icons/icon-192.png':'image/png','icons/icon-512.png':'image/png'}
  for name,mime in resources.items():
   with urlopen(base_url+name,timeout=30) as response:
    assert response.status==200,(name,response.status)
    assert mime in response.headers.get('Content-Type',''),(name,response.headers)
    assert response.read(),name
- print('PASS HTTP 200 and MIME types for all 10 public routes',base_url)
- for name in ['server.mjs','package.json','tests/browser_test.py','tests/app.test.js','reports/report.md','reports/','README.md','CHANGELOG.md','TESTES.txt','iniciar.bat','.github/workflows/deploy-pages.yml','.git/config','.env']:
+ print('PASS HTTP 200 and MIME types for all 11 public routes',base_url)
+ for name in ['server.mjs','package.json','tests/browser_test.py','tests/app.test.js','tests/depth.test.js','tests/xr_fixture.js','reports/report.md','reports/','README.md','CHANGELOG.md','TESTES.txt','iniciar.bat','.github/workflows/deploy-pages.yml','.git/config','.env']:
   try:
    with urlopen(base_url+name,timeout=30) as response:raise AssertionError(f'Private file exposed: {name} ({response.status})')
   except HTTPError as error:assert error.code==404,(name,error.code)
@@ -78,13 +78,57 @@ try:
   assert page.evaluate('(async () => (await navigator.serviceWorker.ready).scope)()')==base_url
   version=json.loads((ROOT/'package.json').read_text(encoding='utf-8'))['version']
   assert page.evaluate('caches.keys()')==['ar-play-v'+version]
-  assert page.evaluate('(async () => (await (await caches.open("ar-play-v'+version+'")).keys()).length)()')==9
+  assert page.evaluate('(async () => (await (await caches.open("ar-play-v'+version+'")).keys()).length)()')==10
   print('PASS service worker scope and versioned cache')
   context.set_offline(True);page.reload();page.wait_for_function('window.__arplay?.state().frameCount > 2');print('PASS offline reload')
   for char in ['nori','luma','bip']:
    page.locator(f'[data-character={char}]').click();assert state()['id']==char
   assert page.evaluate('window.__arplay.glError()')==0
-  assert not errors,errors;assert not console_errors,console_errors;print('PASS no uncaught page errors or unexpected console errors');browser.close()
+  assert not errors,errors;assert not console_errors,console_errors;print('PASS no uncaught page errors or unexpected console errors')
+  context.close()
+  # Isolated synthetic sessions test AR integration/UI, never device support or real depth.
+  simulated=browser.new_context(viewport={'width':393,'height':852})
+  simulated.add_init_script(path=str(ROOT/'tests'/'xr_fixture.js'))
+  for scenario in ['granted','denied','unsupported','reject-option']:
+   xr=simulated.new_page();xr_errors=[];xr.on('pageerror',lambda error:xr_errors.append(str(error)))
+   xr.goto(base_url+'?test=1');xr.wait_for_function('window.__arplay?.state().frameCount > 3')
+   assert xr.locator('#arDiagnostics').is_hidden()
+   xr.evaluate('(scenario) => { window.__xrTest.scenario = scenario; if (scenario === "unsupported") delete window.XRFrame.prototype.getDepthInformation; }',scenario)
+   xr.locator('#ar').click();xr.wait_for_function("window.__arplay.state().mode === 'xr'")
+   assert xr.locator('#depthToggle').is_visible();assert xr.locator('#depthPanel').is_hidden()
+   assert xr.evaluate('window.__xrTest.reads')==0
+   xr.locator('#depthToggle').click();assert xr.locator('#depthPanel').is_visible()
+   if scenario=='granted':
+    xr.wait_for_function("window.__arplay.depth().status === 'available'")
+    assert xr.evaluate('window.__arplay.depth().center')==2
+    assert '2.00 m' in xr.locator('#depthReadout').inner_text()
+    xr.locator('#depthMapToggle').check();xr.wait_for_function('window.__arplay.depth().total === 768')
+    assert xr.locator('#depthMap').is_visible()
+    for height in [650,852]:
+     xr.set_viewport_size({'width':393,'height':height})
+     bounds=xr.locator('#arDiagnostics').bounding_box();joystick=xr.locator('#joystick').bounding_box()
+     assert bounds['y']+bounds['height']<=joystick['y'],(height,bounds,joystick)
+    if os.environ.get('PREVIEW'):xr.screenshot(path=str(Path(os.environ['PREVIEW']).with_name('simulated-depth-'+Path(os.environ['PREVIEW']).name)))
+    xr.evaluate("window.__xrTest.scenario='missing'");xr.wait_for_function("window.__arplay.depth().status === 'waiting'")
+    assert xr.evaluate('window.__arplay.depth().center') is None
+    assert xr.locator('#depthMap').is_hidden()
+    xr.evaluate("window.__xrTest.scenario='error'");xr.wait_for_function("window.__arplay.depth().status === 'error'")
+    xr.evaluate("window.__xrTest.scenario='granted'");xr.wait_for_function("window.__arplay.depth().status === 'available'")
+   else:
+    expected='unsupported' if scenario=='unsupported' else 'not-granted'
+    xr.wait_for_function('(expected) => window.__arplay.depth().status === expected',arg=expected)
+    assert xr.evaluate('window.__xrTest.reads')==0
+    if scenario=='reject-option':assert xr.evaluate('window.__xrTest.requests')==[True,False]
+   xr.locator('#depthToggle').click();reads=xr.evaluate('window.__xrTest.reads');frames=xr.evaluate('window.__arplay.state().frameCount')
+   xr.wait_for_timeout(400);assert xr.evaluate('window.__xrTest.reads')==reads
+   assert xr.evaluate('window.__arplay.state().frameCount')>frames
+   xr.locator('#demo').click();xr.wait_for_function("window.__arplay.state().mode === 'demo'")
+   assert xr.evaluate('window.__arplay.depth().enabled') is False
+   assert xr.evaluate('window.__arplay.depth().center') is None
+   assert xr.locator('#arDiagnostics').is_hidden()
+   assert not xr_errors,xr_errors;xr.close()
+   print('PASS SIMULATED XR depth UI, rendering continuity, cleanup and fallback:',scenario)
+  simulated.close();browser.close()
 finally:
  if server:server.shutdown();server.server_close()
  if staging:staging.cleanup()
