@@ -1,3 +1,4 @@
+import {PROFILES} from './volume.js';
 import {clamp} from './math.js';
 import {DepthProjector, SpatialMap} from './spatial-map.js';
 import {MovementProbe} from './movement-probe.js';
@@ -13,7 +14,7 @@ export function characterVolume(id, scale, ground, out = {}) {
   const bounds = MODEL_BOUNDS[id];
   if (!bounds || !Number.isFinite(scale) || !Number.isFinite(ground)) throw new Error('Invalid character volume');
   const size = .42 * clamp(scale, .4, 1.8); // Same root scale as spatial AR rendering.
-  out.radius = bounds.radius * size; out.height = bounds.height * size; out.ground = ground;
+  out.profile = PROFILES[id]; out.size = size; out.radius = bounds.radius * size; out.height = bounds.height * size; out.ground = ground;
   return out;
 }
 
@@ -118,11 +119,22 @@ export class ARCollisions {
     this.normal = new Float64Array(3);
     this.volume = characterVolume('bip', 1, 0); this.result = {x: 0, z: 0};
     this.stop();
+    if (elements.copyButton) elements.copyButton.onclick = async () => { try { await navigator.clipboard.writeText(this.diagnosticText()); elements.copyButton.textContent = 'Copiado'; } catch { elements.copyButton.textContent = 'Copia indisponivel'; } };
     if (elements.toggle) elements.toggle.onchange = () => this.setEnabled(!!elements.toggle.checked);
     if (elements.visualToggle) elements.visualToggle.onchange = () => { this.visual = !!elements.visualToggle.checked && this.enabled; this.lastDraw = -Infinity; };
   }
+  setIntent(x, z, time) { const n=Math.hypot(x,z),old=Math.hypot(this.intentX,this.intentZ); if(n>1e-8 && (!old || (x*this.intentX+z*this.intentZ)/(n*old)<.5)) this.probe.lastUpdate=-Infinity; this.intentX=x; this.intentZ=z; this.intentTime=n>1e-8 ? time : -Infinity; }
+  probeState(time = this.time) {
+    if (time-this.intentTime>=150) return 'inativa: sem movimento';
+    if (!this.tracking) return 'aguardando pose';
+    if (this.probe.lastUpdate<this.intentTime && time-this.probe.lastUpdate>this.probeInterval) return 'aguardando aquisicao';
+    return this.probe.inactiveReason;
+  }
+  diagnosticText() {
+    return JSON.stringify({version:'1.1.2',state:this.snapshot(),events:Array.from({length:this.eventCount},(_,i)=>this.events[(this.eventCursor-this.eventCount+i+32)%32])},null,2);
+  }
   start(capability) { this.stop(); this.sessionActive = true; this.available = capability === 'waiting'; }
-  setCharacter(id, scale, position) { characterVolume(id, scale, position[1], this.volume); this.position.set(position); }
+  setCharacter(id, scale, position) { this.characterId=id; this.characterScale=scale; characterVolume(id, scale, position[1], this.volume); this.position.set(position); }
   place(position, support = 1) {
     this.clearProbe();
     this.anchor.set(position); this.position.set(position); this.anchored = true;
@@ -165,7 +177,7 @@ export class ARCollisions {
   }
   frame(time, poseValid) {
     if (!this.enabled) return;
-    this.time = time; if (!Number.isFinite(this.enabledAt)) this.enabledAt = time;
+    this.time = time; this.frameDt = Number.isFinite(this.previousFrame) ? Math.max(0, time - this.previousFrame) / 1000 : .05; this.previousFrame = time; if (!Number.isFinite(this.enabledAt)) this.enabledAt = time;
     this.blocked = false; this.direction = ''; this.blockSource = '';
     if (!poseValid && this.tracking) {
       this.clearProbe();
@@ -186,6 +198,7 @@ export class ARCollisions {
       (time - this.lastSample >= this.interval || (time - this.intentTime < 150 && time - this.probe.lastUpdate >= this.probeInterval));
   }
   missing(time, reason) {
+    this.probe.inactiveReason = 'aguardando dados: '+reason;
     this.lastSample = time; this.probe.lastUpdate = time; this.depthState = reason; this.used = this.sampled = 0; this.hz = 0;
     this.depths.fill(0); this.points.fill(0); this.point.fill(0);
   }
@@ -243,8 +256,8 @@ export class ARCollisions {
       this.interval = Math.min(500, this.interval * 1.5); this.columns = 16; this.rows = 12; this.fastUpdates = 0;
     } else if (this.reconstructionMs < 2) {
       this.fastUpdates++;
-      if (this.fastUpdates >= 16 && this.interval > 125) { this.interval = Math.max(125, this.interval * .8); this.fastUpdates = 0; }
-      else if (this.fastUpdates >= 32 && this.interval === 125) { this.columns = 24; this.rows = 18; this.fastUpdates = 0; }
+      if (this.fastUpdates >= 8 && this.interval > 125) { this.interval = Math.max(125, this.interval * .8); this.fastUpdates = 0; }
+      else if (this.fastUpdates >= 16 && this.interval === 125) { this.columns = 24; this.rows = 18; this.fastUpdates = 0; }
     } else this.fastUpdates = 0;
   }
   move(position, dx, dz, time) {
@@ -264,6 +277,16 @@ export class ARCollisions {
       }
     } else if (this.enabled && this.anchored && this.supportValid) {
       this.coverage = this.map.coverage(this.result.x, this.result.z, this.volume, time);
+    }
+    if (this.enabled && Math.hypot(dx,dz)>1e-8) {
+      if(time-this.lastSlotTime>=250){this.eventCursor=(this.eventCursor+1)%32;this.eventCount=Math.min(32,this.eventCount+1);this.lastSlotTime=time;}
+      const event=this.events[(this.eventCursor+31)%32];
+      event.time=time;event.dx=dx;event.dz=dz;event.actualX=this.result.x-position[0];event.actualZ=this.result.z-position[2];
+      event.source=this.blockSource;event.coverage=this.coverage;event.probe=this.probeState(time);event.samples=this.probe.used;
+      event.projected=this.probe.projected;event.invalid=this.probe.rejectDepth;event.duplicates=this.probe.rejectDuplicate;event.geometry=this.probe.rejectGeometry;
+      event.interval=this.interval;event.hz=this.hz;event.radius=this.volume.radius;event.height=this.volume.height;event.scale=this.characterScale;event.character=this.characterId;
+      event.reconstruction=this.reconstructionMs;event.query=this.queryMs;event.probeMs=this.probe.costMs;event.fps=this.frameDt>0?1/this.frameDt:null;event.depth=this.depthState;
+      this.lastEvent=time;
     }
     this.position[0] = this.result.x; this.position[2] = this.result.z;
     return this.result;
@@ -285,7 +308,7 @@ export class ARCollisions {
       coverage: this.coverage, direction: this.direction, blocked: this.blocked,
       interval: this.interval, radius: this.volume.radius, height: this.volume.height, depthState: this.depthState,
       blockSource: this.blockSource, probeSamples: this.probe.used, probeTested: this.probe.tested,
-      probeSupport: this.probe.support, probeMs: this.probe.costMs,
+      probeSupport: this.probe.support, probeMs: this.probe.costMs, probeState:this.probeState(), eventCount:this.eventCount, lastEventAge:Number.isFinite(this.lastEvent)?Math.max(0,this.time-this.lastEvent):null, configuredHz:1000/this.interval, probeProjected:this.probe.projected, rejectDepth:this.probe.rejectDepth, rejectDuplicate:this.probe.rejectDuplicate, rejectGeometry:this.probe.rejectGeometry, probeValid: this.probe.valid, probeDistinct: this.probe.distinct, probeInRegion: this.probe.inRegionCount, probeRejectDepth: this.probe.rejectDepth, probeRejectDuplicate: this.probe.rejectDuplicate, probeRejectGeometry: this.probe.rejectGeometry,
       confirmationAgeMs: this.blocked && Number.isFinite(this.blockConfirmation) ? Math.max(0, this.time - this.blockConfirmation) : null,
       coverageInsufficient: this.coverage < .6 || this.depthState !== 'available',
       lastBlockedDirection: this.time - this.lastBlockedTime < 900 ? this.lastBlockedDirection : ''};
@@ -298,6 +321,8 @@ export class ARCollisions {
     if (visualToggle) visualToggle.disabled = !this.enabled;
     if (readout) readout.textContent = this.enabled && diagnosticOpen ?
       `Pontos úteis: ${this.used}/${this.sampled}\nCélulas ocupadas: ${this.map.occupiedCount} (limite ${this.map.config.maxCells})\nAtualização espacial: ${this.hz ? this.hz.toFixed(1) + ' Hz' : '—'}\nReconstrução: ${this.reconstructionMs === null ? '—' : this.reconstructionMs.toFixed(2) + ' ms'}\nConsulta: ${this.queryMs === null ? '—' : this.queryMs.toFixed(2) + ' ms'}\nCobertura amostrada: ${Math.round(this.coverage * 100)}% (${STATES[this.phase()]})\nDireção bloqueada (XR): ${this.direction || '—'}\nOrigem do bloqueio: ${this.blockSource || 'sem bloqueio atual'}\nSonda: ${this.probe.used}/${this.probe.tested} amostras; apoio local ${this.probe.support} (não é precisão)\nCusto da sonda: ${this.probe.costMs === null ? '—' : this.probe.costMs.toFixed(2) + ' ms'}\nConfirmação do bloqueio: ${this.blocked && Number.isFinite(this.blockConfirmation) ? Math.max(0, time - this.blockConfirmation).toFixed(0) + ' ms atrás' : '—'}\nCobertura: ${this.coverage < .6 || this.depthState !== 'available' ? 'insuficiente; desconhecido não comprova livre' : 'amostrada; não garante espaço livre'}` : '';
+    if (readout && this.enabled && diagnosticOpen) readout.textContent += '\nSonda: '+this.probeState(time)+'\nEventos: '+this.eventCount+'; idade: '+(Number.isFinite(this.lastEvent)?(time-this.lastEvent).toFixed(0):'--')+' ms\nAquisicao: '+this.depthState+'\nHz configurado: '+(1000/this.interval).toFixed(1)+'\nProjetados / invalidos / repetidos / geometria: '+[this.probe.projected,this.probe.rejectDepth,this.probe.rejectDuplicate,this.probe.rejectGeometry].join(' / ');
+    if (readout && this.enabled && diagnosticOpen && this.eventCount) { const e=this.events[(this.eventCursor+31)%32]; readout.textContent+='\nUltimo movimento: '+[e.dx,e.dz].map(v=>v.toFixed(3)).join(',')+' m; efetivo: '+[e.actualX,e.actualZ].map(v=>v.toFixed(3)).join(',')+' m; origem: '+(e.source||'sem bloqueio'); }
     if (!canvas) return;
     canvas.hidden = !this.enabled || !this.visual || !diagnosticOpen;
     if (canvas.hidden || time - this.lastDraw < 500) return;
@@ -327,7 +352,7 @@ export class ARCollisions {
     this.hz = 0; this.reconstructionMs = this.queryMs = null; this.coverage = 0;
     this.lastSample = this.lastData = this.lastRender = this.lastDraw = this.lastPurge = -Infinity;
     this.depthState = 'waiting'; this.blocked = false; this.direction = '';
-    this.time = 0; this.enabledAt = NaN;
+    this.time = 0; this.frameDt = .05; this.previousFrame = NaN; this.enabledAt = NaN;
     this.context?.clearRect(0, 0, 128, 128); this.context = null;
     if (this.elements.toggle) this.elements.toggle.checked = false;
     if (this.elements.visualToggle) this.elements.visualToggle.checked = false;
@@ -336,6 +361,7 @@ export class ARCollisions {
     if (this.elements.canvas) this.elements.canvas.hidden = true;
   }
   clearProbe() {
+    this.events ||= Array.from({length:32},()=>({})); for(const event of this.events) for(const key of Object.keys(event)) delete event[key]; this.eventCount=this.eventCursor=0;this.lastEvent=this.lastSlotTime=-Infinity;
     this.probe.clear(); this.intentX = this.intentZ = 0; this.intentTime = -Infinity;
     this.probeInterval = 66; this.blockSource = ''; this.blockConfirmation = -Infinity;
     this.lastBlockedTime = -Infinity; this.lastBlockedDirection = '';

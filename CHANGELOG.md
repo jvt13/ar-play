@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.1.2 — 2026-11-25
+
+- Volume composto por 12 faixas de altura conservadoras derivadas dos modelos, preservando escala e envelope máximo.
+- Sonda com bordas laterais, faixa baixa e intenção do mesmo frame; nova sondagem ao inverter direção.
+- Recuperação adaptativa após oito aquisições rápidas por passo, com proteção de carga preservada.
+- Diagnóstico de inatividade, aquisição e rejeições; histórico limitado de 32 movimentos e cópia textual manual.
+- Ajuste de fluxo AR para separar posicionamento, opção de colisões e estado, mantendo painel rolável.
+- Fixtures de contato, colchão, visibilidade, inversão de direção, recuperação e limpeza. Cache ar-play-v1.1.2 com módulo volume.
+- Sem homologação física antecipada, novas dependências ou alteração dos modelos.
+
+
 ## 1.1.1 — 2026-11-25
 
 - Correção experimental das colisões AR com combinação de mapa persistente e sonda imediata do corredor de movimento, ativa mesmo com diagnóstico fechado.

@@ -40,7 +40,7 @@ A câmera, renderização e gravação são processadas localmente. O app não e
 
 ## Testes
 
-`npm test`: 61 testes, incluindo reconstrução 3D, projeções assimétricas, chão, confirmação/expiração, cobertura desconhecida, paredes/móveis, posições efetivas, recuo, deslizamento, escala e limpeza. A correção 1.1.1 acrescenta bloqueio imediato com mapa parcial, persistência lateral, liberação confiável, limites geométricos do contato e saída de sobreposição. A expiração de ocupação descarta votos livres fracos anteriores e retorna a desconhecido. O cache final é `ar-play-v1.1.1-r2`. `npm run check` valida a sintaxe JavaScript. Geometria e sessões automatizadas são sintéticas; a suíte de navegador também verifica a integração XR simulada, a sonda com diagnóstico fechado e a preservação dos modos existentes.
+`npm test`: 67 testes, incluindo reconstrução 3D, projeções assimétricas, chão, confirmação/expiração, cobertura desconhecida, paredes/móveis, posições efetivas, recuo, deslizamento, escala e limpeza. A correção 1.1.1 acrescenta bloqueio imediato com mapa parcial, persistência lateral, liberação confiável, limites geométricos do contato e saída de sobreposição. A expiração de ocupação descarta votos livres fracos anteriores e retorna a desconhecido. O cache final é `ar-play-v1.1.2`. `npm run check` valida a sintaxe JavaScript. Geometria e sessões automatizadas são sintéticas; a suíte de navegador também verifica a integração XR simulada, a sonda com diagnóstico fechado e a preservação dos modos existentes.
 
 Benchmark CPU opcional: `node tests/spatial_benchmark.mjs`. Usa geometria sintética, informa ambiente, mediana, p95 e máximos; não mede sensor, câmera ou desempenho no celular.
 
@@ -103,6 +103,18 @@ No **Diagnóstico AR**, consulte pontos usados, células ocupadas, frequência, 
 Limitações: mapa esparso e temporário, confirmação com atraso e precisão ainda não calibrada. Objetos finos, pequenos, fora da vista ou sob a tolerância podem não ser detectados. A resolução e o cilindro conservador podem bloquear passagens visualmente apertadas; superfícies removidas podem permanecer por até 5 s se não houver observações livres confiáveis. A sonda pode manter contato por até 900 ms após retirada do objeto. O aumento de persistência reduz esquecimentos, com esse custo de liberação mais lenta. Não se trata de reconstrução completa, reconhecimento de objetos ou confirmação de que uma região desconhecida está livre.
 
 Para validar: recarregue online a versão 1.1.1 e compare desligado/ligado. Teste primeiro chão livre e reposicionamento, depois parede e móvel baixos: avanço, recuo, diagonal, lateral e pulo. Mude levemente a câmera mantendo o obstáculo visível e confira a continuidade do bloqueio. Repita com diagnóstico fechado e aberto, cobertura limitada, os três personagens e escalas. Remova um obstáculo e confira liberação por observação confiável ou expiração em até 5 s. Compare objetos acima do personagem, perda de rastreamento e encerramento. Registre origem do bloqueio, apoio local, idade, cobertura, FPS, custos e medidas físicas de referência. Refaça as funcionalidades da baseline. A baseline 1.1.0 permanece no histórico em `e01205801ce0b8e0ac00044e019d53bb88c0df67`; qualquer restauração usa novo commit, sem force push.
+
+## Refinamento experimental 1.1.2
+
+O volume usa 12 cilindros por faixa de altura, derivados das esferas originais em caminhada/dança com margem conservadora. O raio máximo anterior permanece na consulta ampla; o contato usa o raio da faixa atingida. A redução de distância depende da altura do obstáculo e do personagem: faixas largas continuam conservadoras. Os testes com 63% e 100% verificam contenção e posições efetivas. Os modelos e o pulo visual foram preservados.
+
+A sonda mantém o alcance validado e o limite de 75 consultas, incluindo as bordas laterais e uma amostragem mais baixa. A intenção é calculada antes da aquisição no mesmo frame; uma mudança superior a 60° antecipa a próxima sondagem sem apagar contatos válidos. A memória temporal não aumentou. A recuperação adaptativa exige oito atualizações consecutivas abaixo de 2 ms por passo, mantendo a proteção de carga e os limites anteriores.
+
+O diagnóstico distingue repouso, espera de aquisição, fora de vista, profundidade inválida, rejeição geométrica e evidência insuficiente. Contadores mostram projeções, repetições de pixels e rejeições. Até 32 eventos ficam somente em memória e preservam o último movimento após soltar o joystick: intenção, deslocamento efetivo, origem do bloqueio, cobertura, escala, dimensões, custos e FPS do frame. Desativar colisões, reposicionar, perder o referencial ou encerrar limpa o registro.
+
+**Copiar diagnóstico textual** copia esse resumo para a área de transferência mediante toque. Não inclui imagens, mapas completos ou dados brutos. O aplicativo não transmite nem persiste o registro; o texto copiado permanece sob controle do usuário. O painel continua rolável e os avisos de posicionamento ficam separados das opções de AR.
+
+Para homologar, compare paredes e colchões nas escalas 63%/100% com os três personagens. Copie o diagnóstico logo após uma travessia ou bloqueio inesperado, compare repouso e movimento, mudanças rápidas de direção e recuperação de frequência. A precisão e o desempenho no Android ainda exigem validação física da 1.1.2.
 
 ## Publicação
 

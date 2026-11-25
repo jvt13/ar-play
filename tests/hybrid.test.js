@@ -186,3 +186,31 @@ test('expired occupied cells discard accumulated weak-free votes and return to u
   assert.equal(m.stateAt(.02, .3, -1.2, 5250), 'unknown');
   assert.equal(m.free.has(m.key(0, 2, -10)), false);
 });
+
+test('wide mattress geometry blocks Bip at 63 percent over repeated frames and permits retreat (synthetic)',()=>{
+  const s=systemAt();s.setCharacter('bip',.63,position);
+  const f=fixture({surface:(o,d)=>{
+    let enter=0,exit=Infinity;
+    const low=[-.9,.07,-2.2],high=[.9,.25,-1.8];
+    for(let a=0;a<3;a++){
+      if(Math.abs(d[a])<1e-8){if(o[a]<low[a]||o[a]>high[a])return 0;continue;}
+      const u=(low[a]-o[a])/d[a],v=(high[a]-o[a])/d[a];enter=Math.max(enter,Math.min(u,v));exit=Math.min(exit,Math.max(u,v));
+    }
+    return exit>=enter&&enter>0?enter:0;
+  }});
+  for(const t of [0,125,250,375]){s.setIntent(0,-.55,t);sample(s,f,t);}
+  const stop=s.move(position,0,-2,400).z;
+  assert.ok(stop>-1.8+s.volume.radius-.05&&stop<-1.2,stop);
+  assert.ok(s.move([0,0,stop],0,.2,410).z>stop+.19);
+});
+
+test('partial visibility and direction reversal expose rejection reasons without freezing retreat (synthetic)',()=>{
+  const s=systemAt();s.setIntent(0,-.55,0);
+  sample(s,fixture({pose:mul(tr(0,.35,0),ry(.6)),surface:planeZ(-2)}),1);
+  assert.ok(s.probe.projected>0&&s.probe.projected<=75);
+  s.setIntent(0,.55,130);sample(s,fixture(),131);
+  assert.ok(s.probe.rejectGeometry>0);assert.ok(s.move(position,0,.2,132).z>-.81);
+  s.setIntent(0,0,140);s.frame(140,true);assert.match(s.probeState(),/sem movimento/);
+  s.setIntent(0,-.55,160);sample(s,fixture({surface:()=>0}),161);
+  assert.equal(s.probe.valid,0);assert.ok(s.probe.rejectDepth>0);
+});

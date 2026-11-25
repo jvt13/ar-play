@@ -37,13 +37,13 @@ if not base_url:
  base_url=f'http://localhost:{server.server_port}/ar-play/'
 base_url=base_url.rstrip('/')+'/'
 try:
- resources={'':'text/html','index.html':'text/html','style.css':'text/css','manifest.webmanifest':'application/manifest+json','sw.js':'javascript','src/app.js':'javascript','src/depth.js':'javascript','src/spatial-map.js':'javascript','src/collision.js':'javascript','src/movement-probe.js':'javascript','src/math.js':'javascript','src/engine.js':'javascript','icons/icon-192.png':'image/png','icons/icon-512.png':'image/png'}
+ resources={'':'text/html','index.html':'text/html','style.css':'text/css','manifest.webmanifest':'application/manifest+json','sw.js':'javascript','src/app.js':'javascript','src/depth.js':'javascript','src/spatial-map.js':'javascript','src/collision.js':'javascript','src/movement-probe.js':'javascript','src/volume.js':'javascript','src/math.js':'javascript','src/engine.js':'javascript','icons/icon-192.png':'image/png','icons/icon-512.png':'image/png'}
  for name,mime in resources.items():
   with urlopen(base_url+name,timeout=30) as response:
    assert response.status==200,(name,response.status)
    assert mime in response.headers.get('Content-Type',''),(name,response.headers)
    assert response.read(),name
- print('PASS HTTP 200 and MIME types for all 14 public routes',base_url)
+ print('PASS HTTP 200 and MIME types for all 15 public routes',base_url)
  for name in ['server.mjs','package.json','tests/browser_test.py','tests/app.test.js','tests/depth.test.js','tests/spatial.test.js','tests/collision.test.js','tests/hybrid.test.js','tests/spatial_benchmark.mjs','tests/xr_fixture.js','reports/report.md','reports/','README.md','CHANGELOG.md','TESTES.txt','iniciar.bat','.github/workflows/deploy-pages.yml','.git/config','.env']:
   try:
    with urlopen(base_url+name,timeout=30) as response:raise AssertionError(f'Private file exposed: {name} ({response.status})')
@@ -89,7 +89,7 @@ try:
   cache=re.search(r"const CACHE='([^']+)'",(ROOT/'sw.js').read_text(encoding='utf-8')).group(1)
   assert re.fullmatch(r'ar-play-v'+re.escape(version)+r'(-r[1-9][0-9]*)?',cache),cache
   assert page.evaluate('caches.keys()')==[cache]
-  assert page.evaluate('(async () => (await (await caches.open("'+cache+'")).keys()).length)()')==13
+  assert page.evaluate('(async () => (await (await caches.open("'+cache+'")).keys()).length)()')==14
   print('PASS service worker scope and versioned cache')
   context.set_offline(True);page.reload();page.wait_for_function('window.__arplay?.state().frameCount > 2');print('PASS offline reload')
   for char in ['nori','luma','bip']:
@@ -165,6 +165,11 @@ try:
   ar.keyboard.down('ArrowUp');ar.keyboard.down('ArrowRight');ar.wait_for_timeout(1800);ar.keyboard.up('ArrowUp');ar.keyboard.up('ArrowRight')
   slid=ar.evaluate('window.__arplay.state().pos');assert slid[0]>retreated[0]+.1;assert slid[2]>-1.8
   ar.locator('#depthToggle').click();ar.wait_for_function('document.querySelector("#collisionReadout").textContent.includes("Células")')
+  ar.evaluate("Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async text=>{window.__copiedDiagnostic=text}}})")
+  ar.locator('#copyDiagnostic').click();ar.wait_for_function('window.__copiedDiagnostic?.includes("events")')
+  for first,second in [('#status','#arDiagnostics'),('#hint','#arDiagnostics')]:
+   a=ar.locator(first).bounding_box();b=ar.locator(second).bounding_box()
+   assert a['y']+a['height']<=b['y'],(first,a,b)
   ar.locator('#collisionVisualToggle').check();ar.wait_for_function('!document.querySelector("#collisionMap").hidden')
   ar.locator('#collisionMap').scroll_into_view_if_needed()
   assert ar.evaluate("() => { const pixels=document.querySelector('#collisionMap').getContext('2d').getImageData(0,0,128,128).data; for(let i=1;i<pixels.length;i+=4) if(pixels[i]>180 && pixels[i]>pixels[i-1] && pixels[i]>pixels[i+1]) return true; return false; }")

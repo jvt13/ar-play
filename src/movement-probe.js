@@ -1,3 +1,4 @@
+import {radiusAt} from './volume.js';
 // Bounded, movement-directed depth evidence. Only derived world points survive XRFrame.
 // Evidence strength counts supporting samples; it is NOT a sensor confidence/precision score.
 export class MovementProbe {
@@ -12,6 +13,9 @@ export class MovementProbe {
     this.samples.fill(0); this.ids.fill(-1); this.history.fill(0); this.point.fill(0);
     this.coherent.fill(0); this.sampleCount = 0;
     this.count = this.used = this.tested = this.valid = this.support = 0;
+    this.projected = this.withDepth = this.distinct = this.inRegionCount = 0;
+    this.rejectDepth = this.rejectDuplicate = this.rejectGeometry = 0;
+    this.inactiveReason = 'inativa'; this.outOfView = false;
     this.lastUpdate = this.lastConfirmation = -Infinity; this.costMs = null;
     this.contactTime = -Infinity;
   }
@@ -30,26 +34,37 @@ export class MovementProbe {
   update(time, reader, projector, projection, position, volume, dx, dz, map) {
     this.lastUpdate = time; this.used = this.tested = this.valid = this.support = 0;
     this.coherent.fill(0); this.sampleCount = 0;
-    const length = Math.hypot(dx, dz); if (!length || !projector.valid) return;
+    this.projected = this.withDepth = this.distinct = this.inRegionCount = 0;
+    this.rejectDepth = this.rejectDuplicate = this.rejectGeometry = 0; this.outOfView = false;
+    const length = Math.hypot(dx, dz); if (length < 1e-8 || !projector.valid) { this.inactiveReason = 'inativa'; return; }
+    this.inactiveReason = '';
     dx /= length; dz /= length;
     let count = 0;
     const radius = volume.radius, reach = radius + .85, low = map.config.floorTolerance;
+    // Five transverse tracks include both cylinder edges and its centre; three heights
+    // cover low furniture and the body while remaining below the existing vertical envelope.
     for (let forward = 0; forward < 5; forward++) for (let side = 0; side < 5; side++) for (let level = 0; level < 3; level++) {
       this.tested++;
-      const along = .08 + forward * (reach - .08) / 4, across = (side - 2) * radius * .45;
+      const along = .08 + forward * (reach - .08) / 4;
+      const across = (side - 2) * radius * .5;
       const wx = position[0] + dx * along - dz * across, wz = position[2] + dz * along + dx * across;
-      const wy = volume.ground + low + (volume.height - low) * (.16 + level * .34);
-      if (!this.project(wx, wy, wz, projector.pose, projection, this.point)) continue;
+      const wy = volume.ground + low + (volume.height - low) * (.10 + level * .34);
+      if (!this.project(wx, wy, wz, projector.pose, projection, this.point)) { this.outOfView = true; continue; }
+      this.projected++;
       const u = this.point[0], v = this.point[1], depth = reader.at(u, v, true), id = reader.lastIndex;
-      if (!(depth >= .15 && depth <= 6)) continue;
+      if (!(depth >= .15 && depth <= 6)) { this.rejectDepth++; continue; }
       this.valid++;
+      this.withDepth++;
       // Repeated queries of one native pixel cannot manufacture independent evidence.
       let duplicate = false;
       for (let i = 0; i < count; i++) if (this.ids[i] === id) { duplicate = true; break; }
-      if (duplicate || !projector.point(u, v, depth, this.point)) continue;
+      if (duplicate) { this.rejectDuplicate++; continue; }
+      this.distinct++;
+      if (!projector.point(u, v, depth, this.point)) { this.rejectGeometry++; continue; }
       const x = this.point[0], y = this.point[1], z = this.point[2];
       const px = x - position[0], pz = z - position[2], a = px * dx + pz * dz, b = -px * dz + pz * dx;
-      if (a < -radius * .2 || a > reach || Math.abs(b) > radius + .04 || !map.inRegion(x, y, z)) continue;
+      if (a < -radius * .2 || a > reach || Math.abs(b) > radius + .04 || !map.inRegion(x, y, z)) { this.rejectGeometry++; continue; }
+      this.inRegionCount++;
       this.ids[count] = id; this.samples.set(this.point, count * 3); count++;
     }
     this.sampleCount = count;
@@ -87,6 +102,7 @@ export class MovementProbe {
       this.history[b + 6] = longest / 2;
       this.lastConfirmation = time;
     }
+    this.inactiveReason = this.used ? 'evidencia' : !this.projected ? 'fora da vista' : !this.valid ? 'dados inválidos' : this.inRegionCount < 3 ? 'rejeição geométrica' : 'evidência insuficiente';
   }
   penetration(x, z, volume, time, skin) {
     this.contactTime = -Infinity;
@@ -97,7 +113,7 @@ export class MovementProbe {
       if (time - this.history[b + 3] >= 900 || this.history[b + 1] <= volume.ground + this.config.floorTolerance || this.history[b + 1] >= volume.ground + volume.height) continue;
       const dx = x - this.history[b], dz = z - this.history[b + 2];
       const along = Math.max(-this.history[b + 6], Math.min(this.history[b + 6], dx * this.history[b + 4] + dz * this.history[b + 5]));
-      const depth = volume.radius + skin + this.config.pointMargin - Math.hypot(dx - along * this.history[b + 4], dz - along * this.history[b + 5]);
+      const depth = radiusAt(volume,this.history[b+1]) + skin + this.config.pointMargin - Math.hypot(dx - along * this.history[b + 4], dz - along * this.history[b + 5]);
       overlap = Math.max(overlap, depth);
       if (depth > 0) this.contactTime = Math.max(this.contactTime, this.history[b + 3]);
     }

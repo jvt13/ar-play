@@ -1,3 +1,4 @@
+import {radiusAt} from './volume.js';
 import {invert4} from './math.js';
 
 export const SPATIAL_CONFIG = Object.freeze({
@@ -212,7 +213,7 @@ export class SpatialMap {
           const ex = Math.max(ax - x, 0, x - bx), ez = Math.max(az - z, 0, z - bz);
           const distance = Math.hypot(ex, ez);
           const inside = !distance ? Math.min(x - ax, bx - x, z - az, bz - z) : 0;
-          const depth = r - distance + inside;
+          const depth = radiusAt(volume,cell.minY,cell.maxY) + skin - distance + inside;
           overlap = Math.max(overlap, depth);
           if (depth > 0) this.contactTime = Math.max(this.contactTime, cell.time);
         }
