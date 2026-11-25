@@ -16,7 +16,7 @@ Na pasta ARPlay, execute `npm start`. Abra `http://localhost:8080` no navegador.
 
 ## Executar no Android
 
-1. Abra a URL HTTPS do GitHub Pages registrada na seção Publicação. A publicação inicial ainda está pendente de autenticação e autorização para criar o repositório público. Não há backend, chaves ou banco.
+1. Abra a URL HTTPS do GitHub Pages registrada na seção Publicação. Não há backend, chaves ou banco.
 2. Abra a URL HTTPS no Chrome para Android. Para AR espacial, o aparelho precisa suportar ARCore e ter Google Play Services para AR instalado e atualizado. Autorize a câmera quando solicitada.
 3. Teste primeiro o Estúdio, depois a Câmera e finalmente AR espacial. Para instalar o PWA, use a opção Instalar/Adicionar à tela inicial no Chrome, quando disponível.
 
@@ -40,21 +40,21 @@ A câmera, renderização e gravação são processadas localmente. O app não e
 
 Suíte de navegador: instale Python 3.12+, Playwright (`python -m pip install playwright==1.63.0`) e Chromium (`python -m playwright install chromium`). Execute `python tests/browser_test.py`. Ajuste a variável `CHROMIUM` com o caminho de um Chrome/Chromium instalado, se necessário. O teste usa câmera simulada e hospeda somente os arquivos públicos em um diretório temporário sob `/ar-play/`, com porta livre. `PREVIEW` permite salvar capturas; `BASE_URL` permite verificar a URL HTTPS publicada em vez do servidor temporário. Essas ferramentas são exclusivas de teste; o aplicativo continua sem dependências de execução. O WebXR real não é coberto por essa suíte.
 
-Resultados da ARP-001, limitações do ambiente e estado da publicação: consulte [reports/report.md](reports/report.md). Câmera física, sensores, instalação no Android e ARCore exigem validação no aparelho.
+Câmera física, sensores, instalação no Android e ARCore exigem validação no aparelho. Os testes de navegador usam câmera simulada e não homologam WebXR/ARCore.
 
 ## Publicação
 
 Workflow: [deploy-pages.yml](.github/workflows/deploy-pages.yml), baseado no [mecanismo oficial do GitHub Pages](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages).
 
-**URL pública:** ainda indisponível. Endereço previsto, sujeito à criação autorizada do repositório: `https://jvt13.github.io/ar-play/`. Esse endereço não representa uma publicação concluída.
+**URL pública:** publicação em preparação para `https://jvt13.github.io/ar-play/`. A disponibilidade ainda depende da conclusão do deploy.
 
 1. Autentique o GitHub CLI com `gh auth login --hostname github.com --git-protocol https --web --scopes workflow`. Não coloque credenciais no projeto.
 2. Após autorização expressa para tornar o código público, crie um repositório novo `ar-play` na conta desejada. Se o nome já existir, interrompa e escolha um destino autorizado; não sobrescreva o repositório existente. Vincule esse destino ao remote `origin`.
 3. Em **Settings → Pages → Build and deployment → Source**, selecione **GitHub Actions**.
 4. Envie a branch `main` com `git push -u origin main`. Também é possível executar manualmente **Actions → Deploy GitHub Pages → Run workflow**, selecionando `main`.
-5. Aguarde os testes e o deploy terminarem com sucesso; confirme HTTP 200 na URL e nos recursos. Registre a URL efetiva neste README e em `reports/report.md`.
+5. Aguarde os testes e o deploy terminarem com sucesso; confirme HTTP 200 na URL e nos recursos. Registre a URL efetiva neste README.
 
-O workflow exige aprovação dos testes Node, sintaxe e navegador antes de enviar o artefato ao Pages. Copia apenas `index.html`, `style.css`, `manifest.webmanifest`, `sw.js`, `src/` e `icons/` para um diretório temporário do runner. Servidor local, testes, relatórios, configurações e metadados do repositório não integram o site. A permissão de escrita no Pages e o token de identidade ficam limitados ao job de deploy.
+O workflow exige aprovação dos testes Node, sintaxe e navegador antes de enviar o artefato ao Pages. Copia apenas `index.html`, `style.css`, `manifest.webmanifest`, `sw.js`, `src/` e `icons/` para um diretório temporário do runner. Servidor local, testes, relatórios, configurações e metadados do repositório não integram o site. A pasta `reports/` é exclusivamente local e está excluída do versionamento. A permissão de escrita no Pages e o token de identidade ficam limitados ao job de deploy.
 
 Para atualizações futuras, altere a versão em `package.json` e o identificador `CACHE` em `sw.js`, registre o changelog, execute os testes e envie para `main`. O novo worker pré-carrega os arquivos, remove caches `ar-play-` antigos e assume o controle. Recarregue abas já abertas após a atualização para executar os módulos da nova versão. Preserve caminhos relativos, `start_url` e `scope` como `./`.
 

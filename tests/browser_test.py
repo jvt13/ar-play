@@ -35,7 +35,7 @@ try:
    assert mime in response.headers.get('Content-Type',''),(name,response.headers)
    assert response.read(),name
  print('PASS HTTP 200 and MIME types for all 10 public routes',base_url)
- for name in ['server.mjs','package.json','tests/browser_test.py','reports/report.md','.env']:
+ for name in ['server.mjs','package.json','tests/browser_test.py','tests/app.test.js','reports/report.md','reports/','README.md','CHANGELOG.md','TESTES.txt','iniciar.bat','.github/workflows/deploy-pages.yml','.git/config','.env']:
   try:
    with urlopen(base_url+name,timeout=30) as response:raise AssertionError(f'Private file exposed: {name} ({response.status})')
   except HTTPError as error:assert error.code==404,(name,error.code)
