@@ -16,8 +16,8 @@ export class MovementProbe {
     this.projected = this.withDepth = this.distinct = this.inRegionCount = 0;
     this.rejectDepth = this.rejectDuplicate = this.rejectGeometry = 0;
     this.inactiveReason = 'inativa'; this.outOfView = false;
-    this.lastUpdate = this.lastConfirmation = -Infinity; this.costMs = null;
-    this.contactTime = -Infinity;
+    this.acquiredTime = this.lastUpdate = this.lastConfirmation = -Infinity; this.costMs = null;
+    this.contactTime = -Infinity;this.directionX=this.directionZ=null;
   }
   // Rigid inverse pose, followed by the actual (possibly asymmetric) view projection.
   project(x, y, z, pose, projection, out) {
@@ -32,13 +32,13 @@ export class MovementProbe {
     return out[0] >= 0 && out[0] <= 1 && out[1] >= 0 && out[1] <= 1;
   }
   update(time, reader, projector, projection, position, volume, dx, dz, map) {
-    this.lastUpdate = time; this.used = this.tested = this.valid = this.support = 0;
+    this.acquiredTime = this.lastUpdate = time; this.used = this.tested = this.valid = this.support = 0;
     this.coherent.fill(0); this.sampleCount = 0;
     this.projected = this.withDepth = this.distinct = this.inRegionCount = 0;
     this.rejectDepth = this.rejectDuplicate = this.rejectGeometry = 0; this.outOfView = false;
     const length = Math.hypot(dx, dz); if (length < 1e-8 || !projector.valid) { this.inactiveReason = 'inativa'; return; }
     this.inactiveReason = '';
-    dx /= length; dz /= length;
+    dx /= length; dz /= length;this.directionX=dx;this.directionZ=dz;
     let count = 0;
     const radius = volume.radius, reach = radius + .85, low = map.config.floorTolerance;
     // Five transverse tracks include both cylinder edges and its centre; three heights
@@ -104,6 +104,10 @@ export class MovementProbe {
     }
     this.inactiveReason = this.used ? 'evidencia' : !this.projected ? 'fora da vista' : !this.valid ? 'dados inválidos' : this.inRegionCount < 3 ? 'rejeição geométrica' : 'evidência insuficiente';
   }
+  allowsMove(x,z,nx,nz,volume,time,skin,escape=false) {
+    this.motion=true;this.fromX=x;this.fromZ=z;this.escape=escape;this.motionAllowed=true;this.motionReason=null;this.motionBefore=this.motionAfter=this.motionDistance=null;
+    this.penetration(nx,nz,volume,time,skin);this.motion=false;return this.motionAllowed;
+  }
   penetration(x, z, volume, time, skin) {
     this.contactTime = -Infinity;
     let overlap = 0;
@@ -114,6 +118,16 @@ export class MovementProbe {
       const dx = x - this.history[b], dz = z - this.history[b + 2];
       const along = Math.max(-this.history[b + 6], Math.min(this.history[b + 6], dx * this.history[b + 4] + dz * this.history[b + 5]));
       const depth = radiusAt(volume,this.history[b+1]) + skin + this.config.pointMargin - Math.hypot(dx - along * this.history[b + 4], dz - along * this.history[b + 5]);
+      if(this.motion && depth>0) {
+        const dx0=this.fromX-this.history[b],dz0=this.fromZ-this.history[b+2],tx=this.history[b+4],tz=this.history[b+5],half=this.history[b+6];
+        const r0=radiusAt(volume,this.history[b+1])+skin+this.config.pointMargin;
+        const a0=Math.max(-half,Math.min(half,dx0*tx+dz0*tz));
+        let before=r0-Math.hypot(dx0-a0*tx,dz0-a0*tz),after=depth;
+        const fromSide=dx0*tz-dz0*tx,toSide=dx*tz-dz*tx,crossing=half>0&&Math.abs(fromSide)>1e-8&&fromSide*toSide<0;
+        if(!this.escape && half>0){before=r0-Math.abs(fromSide);after=r0-Math.abs(toSide);}
+        const closingPoint=half===0&&(dx0*(x-this.fromX)+dz0*(z-this.fromZ)) < -1e-10;
+        if(crossing || closingPoint || (this.escape ? before<=0 : after>Math.max(0,before)+1e-8)){this.motionAllowed=false;this.motionReason=crossing?'crossed-contact-plane':closingPoint?'closing-point-contact':this.escape?'new-contact-during-escape':'contact-worsening';this.motionBefore=before;this.motionAfter=after;this.motionDistance=Math.hypot(dx-along*tx,dz-along*tz);}
+      }
       overlap = Math.max(overlap, depth);
       if (depth > 0) this.contactTime = Math.max(this.contactTime, this.history[b + 3]);
     }

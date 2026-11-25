@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.1.3 — 2026-11-25
+
+- Auditoria matemática direcionada com fixtures independentes de profundidade axial, UV, projeção assimétrica, rotação/inclinação, controle, pés e apoio fora de Y=0.
+- Correção de agravamento de contatos oculto pelo máximo entre fontes/células; verificação por contato e saída próxima condicionada a destino livre e ausência de contatos novos.
+- Transformação horizontal compartilhada entre intenção e deslocamento, mantendo a semântica relativa à câmera.
+- Validação de metadados `depth.view` quando disponíveis, preservando o caminho legado CPU.
+- Visualização 3D opcional com dados existentes do algoritmo, mesmo pipeline WebGL do personagem, limites fixos, volume, apoio e vetores reais.
+- Diagnóstico detalhado e resumo independente do último bloqueio; base renderizada medida no desenho original, sem ajuste automático de altura.
+- Cache `ar-play-v1.1.3` e inventários atualizados com `src/spatial-debug.js`. Sem novas dependências de execução ou homologação física antecipada.
+
 ## 1.1.2 — 2026-11-25
 
 - Volume composto por 12 faixas de altura conservadoras derivadas dos modelos, preservando escala e envelope máximo.

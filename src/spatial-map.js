@@ -20,8 +20,9 @@ export class DepthProjector {
     const projection = view?.projectionMatrix, pose = view?.transform?.matrix;
     if (!finiteMatrix(projection) || !finiteMatrix(pose)) return false;
     // Current CPU view-aligned contract; never guess geometry for an unaligned sensor.
-    const ownProjection = info.projectionMatrix, ownPose = info.transform?.matrix;
-    if (('projectionMatrix' in info || 'transform' in info) && (!finiteMatrix(ownProjection) || !finiteMatrix(ownPose) ||
+    const geometry = info.view || info;
+    const ownProjection = geometry.projectionMatrix, ownPose = geometry.transform?.matrix;
+    if (('view' in info || 'projectionMatrix' in info || 'transform' in info) && (!finiteMatrix(ownProjection) || !finiteMatrix(ownPose) ||
         !matches(ownProjection, projection) || !matches(ownPose, pose))) return false;
     if (Math.abs(projection[3]) > 1e-6 || Math.abs(projection[7]) > 1e-6 ||
         Math.abs(projection[15]) > 1e-6 || projection[11] >= 0) return false;
@@ -106,7 +107,7 @@ export class SpatialMap {
     let cell = this.cells.get(key);
     if (!cell) {
       if (this.cells.size >= this.config.maxCells) { this.saturated = true; return false; }
-      cell = {key, ix, iy, iz, minX: x, maxX: x, minY: y, maxY: y, minZ: z, maxZ: z,
+      cell = {key, ix, iy, iz, firstX:x, firstZ:z, tangentX:0, tangentZ:0, span:0, planar:true, minX: x, maxX: x, minY: y, maxY: y, minZ: z, maxZ: z,
         hits: 0, time: this.time, batch: -1, confirmed: false, freeHits: 0, freeBatch: -1};
       this.cells.set(key, cell);
     }
@@ -119,6 +120,9 @@ export class SpatialMap {
     cell.minX = Math.min(cell.minX, x); cell.maxX = Math.max(cell.maxX, x);
     cell.minY = Math.min(cell.minY, y); cell.maxY = Math.max(cell.maxY, y);
     cell.minZ = Math.min(cell.minZ, z); cell.maxZ = Math.max(cell.maxZ, z);
+    const vx=x-cell.firstX,vz=z-cell.firstZ,span=Math.hypot(vx,vz);
+    if(cell.span && Math.abs(vx*cell.tangentZ-vz*cell.tangentX)>this.config.pointMargin) cell.planar=false;
+    if(span>cell.span){cell.span=span;cell.tangentX=vx/span;cell.tangentZ=vz/span;}
     this.free.delete(key);
     return true;
   }
@@ -192,6 +196,18 @@ export class SpatialMap {
     return known / 15;
   }
   collides(x, z, volume, time, skin = .015) { return this.penetration(x, z, volume, time, skin) > 0; }
+  allowsMove(x,z,nx,nz,volume,time,skin,escape=false) {
+    this.motion=true;this.fromX=x;this.fromZ=z;this.escape=escape;this.interiorEscape=escape&&this.interiorAt(x,z,volume,time);this.motionAllowed=true;this.motionReason=null;this.motionBefore=this.motionAfter=this.motionDistance=null;
+    this.penetration(nx,nz,volume,time,skin);this.motion=false;return this.motionAllowed;
+  }
+  interiorAt(x,z,volume,time){
+    const c=this.config,s=c.cellSize,o=this.origin,ix=Math.floor((x-o[0])/s),iz=Math.floor((z-o[2])/s);
+    for(let a=ix-1;a<=ix+1;a++)for(let b=iz-1;b<=iz+1;b++)for(let y=Math.floor((volume.ground+c.floorTolerance-o[1])/s);y<=Math.floor((volume.ground+volume.height-o[1])/s);y++){
+      const cell=this.cells.get(this.key(a,y,b));
+      if(cell?.confirmed&&!cell.planar&&time-cell.time<c.ttl&&cell.maxX-cell.minX>1e-6&&cell.maxZ-cell.minZ>1e-6&&x>=cell.minX-1e-8&&x<=cell.maxX+1e-8&&z>=cell.minZ-1e-8&&z<=cell.maxZ+1e-8)return true;
+    }
+    return false;
+  }
   penetration(x, z, volume, time, skin = .015) {
     this.contactTime = -Infinity;
     if (!this.ready) return 0;
@@ -214,6 +230,23 @@ export class SpatialMap {
           const distance = Math.hypot(ex, ez);
           const inside = !distance ? Math.min(x - ax, bx - x, z - az, bz - z) : 0;
           const depth = radiusAt(volume,cell.minY,cell.maxY) + skin - distance + inside;
+          if(this.motion && depth>0) {
+            const ex0=Math.max(ax-this.fromX,0,this.fromX-bx),ez0=Math.max(az-this.fromZ,0,this.fromZ-bz);
+            const distance0=Math.hypot(ex0,ez0),inside0=!distance0?Math.min(this.fromX-ax,bx-this.fromX,this.fromZ-az,bz-this.fromZ):0;
+            let before=radiusAt(volume,cell.minY,cell.maxY)+skin-distance0+inside0,after=depth;
+            let crossing=false;
+            if(cell.planar && cell.span>1e-6) {
+              // Signed distance to the measured local surface, allowing its tangent even
+              // when the footprint starts overlapping several adjacent samples.
+              const r0=radiusAt(volume,cell.minY,cell.maxY)+skin+c.pointMargin;
+              const fromSide=(this.fromX-cell.firstX)*cell.tangentZ-(this.fromZ-cell.firstZ)*cell.tangentX,toSide=(x-cell.firstX)*cell.tangentZ-(z-cell.firstZ)*cell.tangentX;
+              crossing=Math.abs(fromSide)>1e-8&&fromSide*toSide<0;
+              if(!this.escape){before=r0-Math.abs(fromSide);after=r0-Math.abs(toSide);}
+            }
+            const gx=this.fromX-Math.max(cell.minX,Math.min(cell.maxX,this.fromX)),gz=this.fromZ-Math.max(cell.minZ,Math.min(cell.maxZ,this.fromZ));
+            const closing=(!cell.planar||cell.span<=1e-6)&&(gx*(x-this.fromX)+gz*(z-this.fromZ)) < -1e-10;
+            if(((crossing||closing)&&!this.interiorEscape) || (this.escape ? before<=0 : after>Math.max(0,before)+1e-8)){this.motionAllowed=false;this.motionReason=crossing?'crossed-contact-plane':closing?'closing-measured-contact':this.escape?'new-contact-during-escape':'contact-worsening';this.motionBefore=before;this.motionAfter=after;this.motionDistance=distance;}
+          }
           overlap = Math.max(overlap, depth);
           if (depth > 0) this.contactTime = Math.max(this.contactTime, cell.time);
         }

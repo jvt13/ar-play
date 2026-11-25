@@ -15,7 +15,7 @@
   const cameraInverse = new Float32Array(I); cameraInverse[13] = -.35;
   class FakeFrame {
     constructor(session) { this.session = session; }
-    getViewerPose() { return {transform: {matrix: camera}, views: [{projectionMatrix: P, transform: {matrix: camera, inverse: {matrix: cameraInverse}}}]}; }
+    getViewerPose() { camera[12]=test.cameraX??0;cameraInverse[12]=-camera[12];return {transform: {matrix: camera}, views: [{projectionMatrix: P, transform: {matrix: camera, inverse: {matrix: cameraInverse}}}]}; }
     getHitTestResults() {
       if (!test.spatial) return [];
       test.hitReady = true;

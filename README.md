@@ -1,4 +1,4 @@
-# AR Play — v1.1.1 (MVP)
+# AR Play — v1.1.3 (MVP)
 
 Aplicativo web de personagens 3D interativos, inspirado na experiência de câmera com efeitos de realidade aumentada. Não é uma reprodução do TikTok. Os três personagens (Bip, Nori e Luma) são construídos proceduralmente, sem baixar modelos ou usar ativos proprietários.
 
@@ -40,7 +40,7 @@ A câmera, renderização e gravação são processadas localmente. O app não e
 
 ## Testes
 
-`npm test`: 67 testes, incluindo reconstrução 3D, projeções assimétricas, chão, confirmação/expiração, cobertura desconhecida, paredes/móveis, posições efetivas, recuo, deslizamento, escala e limpeza. A correção 1.1.1 acrescenta bloqueio imediato com mapa parcial, persistência lateral, liberação confiável, limites geométricos do contato e saída de sobreposição. A expiração de ocupação descarta votos livres fracos anteriores e retorna a desconhecido. O cache final é `ar-play-v1.1.2`. `npm run check` valida a sintaxe JavaScript. Geometria e sessões automatizadas são sintéticas; a suíte de navegador também verifica a integração XR simulada, a sonda com diagnóstico fechado e a preservação dos modos existentes.
+`npm test`: 83 testes, incluindo reconstrução 3D, projeções assimétricas, chão, confirmação/expiração, cobertura desconhecida, paredes/móveis, posições efetivas, recuo, deslizamento, escala e limpeza. A correção 1.1.1 acrescenta bloqueio imediato com mapa parcial, persistência lateral, liberação confiável, limites geométricos do contato e saída de sobreposição. A expiração de ocupação descarta votos livres fracos anteriores e retorna a desconhecido. O cache atual é `ar-play-v1.1.3`. `npm run check` valida a sintaxe JavaScript. Geometria e sessões automatizadas são sintéticas; a suíte de navegador também verifica a integração XR simulada, a sonda com diagnóstico fechado e a preservação dos modos existentes.
 
 Benchmark CPU opcional: `node tests/spatial_benchmark.mjs`. Usa geometria sintética, informa ambiente, mediana, p95 e máximos; não mede sensor, câmera ou desempenho no celular.
 
@@ -115,6 +115,22 @@ O diagnóstico distingue repouso, espera de aquisição, fora de vista, profundi
 **Copiar diagnóstico textual** copia esse resumo para a área de transferência mediante toque. Não inclui imagens, mapas completos ou dados brutos. O aplicativo não transmite nem persiste o registro; o texto copiado permanece sob controle do usuário. O painel continua rolável e os avisos de posicionamento ficam separados das opções de AR.
 
 Para homologar, compare paredes e colchões nas escalas 63%/100% com os três personagens. Copie o diagnóstico logo após uma travessia ou bloqueio inesperado, compare repouso e movimento, mudanças rápidas de direção e recuperação de frequência. A precisão e o desempenho no Android ainda exigem validação física da 1.1.2.
+
+## Validação geométrica e depuração 1.1.3
+
+Foram corrigidos casos sintéticos em que a redução do maior contato ocultava o agravamento de outro contato, no mapa ou na sonda. Cada contato relevante é verificado antes do deslocamento; uma saída de sobreposição exige destino livre e não pode introduzir um contato antes ausente. A tangência local usa a direção medida dos pontos quando disponível. Margens, perfis corporais e persistência foram preservados. Isso não homologa os relatos físicos da 1.1.2.
+
+O joystick continua relativo à câmera. A transformação horizontal agora é compartilhada entre intenção e movimento efetivo. A orientação visual do personagem não inverte a consulta. A profundidade continua axial, no referencial local XR; metadados via `depth.view`, quando existentes, também são verificados. Na API CPU legada sem esses metadados, preserva-se o contrato de alinhamento à vista. Falta de suporte continua permitindo o modo AR original.
+
+Em **Diagnóstico AR**, ative **Visualizar geometria 3D** após posicionar o personagem e ligar colisões. A opção começa desligada e pode continuar visível com o painel fechado. Verde: amostras compatíveis com o apoio; amarelo: candidatos reconstruídos; cinza: reconstruídos fora da faixa/ROI; vermelho: limites ocupados confirmados; laranja: contatos recentes da sonda; azul: as 12 faixas do volume, incluindo pele de contato; grade discreta: plano de apoio escolhido; magenta/ciano: deslocamento solicitado/permitido, sem amplificação. A grade não é reconstrução adicional do chão. A ausência de pontos não indica espaço livre. Os contornos azuis usam 24 segmentos por círculo.
+
+O desenho usa os mesmos shaders, referencial e projeção do personagem. Limites: 6.000 vértices, os até 432 pontos já reconstruídos, 64 células e 128 contatos. O buffer CPU ocupa 144.000 bytes; o buffer WebGL do mesmo tamanho é liberado ao desligar. Nenhuma imagem ou mapa completo é copiado pelo diagnóstico textual.
+
+O texto preserva um **último bloqueio** separado dos 32 eventos, mesmo após soltar o joystick ou fazer movimentos livres. Registra entrada do controle, vetor XR, direção/instante da última sonda, posições anterior/pretendida/final, deslocamentos, penetrações, motivo, contato disponível, idade da evidência, apoio, escala, aquisição e custos. Valores indisponíveis ficam explícitos. Desativar colisões, reposicionar, perder o rastreamento/referencial ou encerrar limpa os dados.
+
+Também são mostrados apoio lógico, base renderizada, sombra, pulo e altura do plano na posição atual. Pés em repouso coincidem com o apoio nas fixtures; caminhada/pulo podem produzir deslocamentos visuais. O movimento permanece horizontal: num apoio inclinado, a diferença para o plano pode variar, sem ajuste automático de altura. Não há subida, gravidade adicional ou oclusão real; sobreposição na imagem não prova penetração física.
+
+Para homologar a 1.1.3, compare câmera parada e em movimento, quatro direções e diagonais. Observe se pontos e linhas permanecem no ambiente ao mover o celular. Após bloqueio invertido ou travessia, solte o joystick e copie o diagnóstico textual, incluindo o último bloqueio. Compare 63%/100%, os três personagens, chão, parede e colchão. Precisão, alinhamento e desempenho no Android ainda dependem desse teste.
 
 ## Publicação
 

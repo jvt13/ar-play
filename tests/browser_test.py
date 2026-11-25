@@ -37,14 +37,14 @@ if not base_url:
  base_url=f'http://localhost:{server.server_port}/ar-play/'
 base_url=base_url.rstrip('/')+'/'
 try:
- resources={'':'text/html','index.html':'text/html','style.css':'text/css','manifest.webmanifest':'application/manifest+json','sw.js':'javascript','src/app.js':'javascript','src/depth.js':'javascript','src/spatial-map.js':'javascript','src/collision.js':'javascript','src/movement-probe.js':'javascript','src/volume.js':'javascript','src/math.js':'javascript','src/engine.js':'javascript','icons/icon-192.png':'image/png','icons/icon-512.png':'image/png'}
+ resources={'':'text/html','index.html':'text/html','style.css':'text/css','manifest.webmanifest':'application/manifest+json','sw.js':'javascript','src/app.js':'javascript','src/depth.js':'javascript','src/spatial-map.js':'javascript','src/collision.js':'javascript','src/movement-probe.js':'javascript','src/volume.js':'javascript','src/spatial-debug.js':'javascript','src/math.js':'javascript','src/engine.js':'javascript','icons/icon-192.png':'image/png','icons/icon-512.png':'image/png'}
  for name,mime in resources.items():
   with urlopen(base_url+name,timeout=30) as response:
    assert response.status==200,(name,response.status)
    assert mime in response.headers.get('Content-Type',''),(name,response.headers)
    assert response.read(),name
- print('PASS HTTP 200 and MIME types for all 15 public routes',base_url)
- for name in ['server.mjs','package.json','tests/browser_test.py','tests/app.test.js','tests/depth.test.js','tests/spatial.test.js','tests/collision.test.js','tests/hybrid.test.js','tests/spatial_benchmark.mjs','tests/xr_fixture.js','reports/report.md','reports/','README.md','CHANGELOG.md','TESTES.txt','iniciar.bat','.github/workflows/deploy-pages.yml','.git/config','.env']:
+ print('PASS HTTP 200 and MIME types for all 16 public routes',base_url)
+ for name in ['server.mjs','package.json','tests/browser_test.py','tests/app.test.js','tests/depth.test.js','tests/spatial.test.js','tests/collision.test.js','tests/hybrid.test.js','tests/refinement.test.js','tests/directional.test.js','tests/spatial-debug.test.js','tests/spatial_benchmark.mjs','tests/xr_fixture.js','reports/report.md','reports/','README.md','CHANGELOG.md','TESTES.txt','iniciar.bat','.github/workflows/deploy-pages.yml','.git/config','.env']:
   try:
    with urlopen(base_url+name,timeout=30) as response:raise AssertionError(f'Private file exposed: {name} ({response.status})')
   except HTTPError as error:assert error.code==404,(name,error.code)
@@ -89,7 +89,7 @@ try:
   cache=re.search(r"const CACHE='([^']+)'",(ROOT/'sw.js').read_text(encoding='utf-8')).group(1)
   assert re.fullmatch(r'ar-play-v'+re.escape(version)+r'(-r[1-9][0-9]*)?',cache),cache
   assert page.evaluate('caches.keys()')==[cache]
-  assert page.evaluate('(async () => (await (await caches.open("'+cache+'")).keys()).length)()')==14
+  assert page.evaluate('(async () => (await (await caches.open("'+cache+'")).keys()).length)()')==15
   print('PASS service worker scope and versioned cache')
   context.set_offline(True);page.reload();page.wait_for_function('window.__arplay?.state().frameCount > 2');print('PASS offline reload')
   for char in ['nori','luma','bip']:
@@ -170,6 +170,33 @@ try:
   for first,second in [('#status','#arDiagnostics'),('#hint','#arDiagnostics')]:
    a=ar.locator(first).bounding_box();b=ar.locator(second).bounding_box()
    assert a['y']+a['height']<=b['y'],(first,a,b)
+  assert not ar.locator('#spatialDebugToggle').is_checked()
+  ar.wait_for_function('window.__arplay.spatial().renderedBase !== null')
+  support=ar.evaluate('window.__arplay.spatial()');assert abs(support['renderedBase']-support['supportY'])<.03,support
+  assert abs(support['shadowY']-support['supportY']-.003)<1e-5,support
+  ar.locator('#spatialDebugToggle').check();ar.wait_for_function('window.__arplay.spatialDebug().vertices > 0')
+  stats=ar.evaluate('window.__arplay.spatialDebug()');assert stats['vertices']<=6000 and stats['cells']<=64
+  assert stats['candidates']>0 and stats['cpuBytes']==144000,stats
+  assert ar.evaluate('window.__arplay.glError()')==0
+  pixel_check="""() => {const canvas=document.querySelector('#gl'),g=canvas.getContext('webgl'),data=new Uint8Array(canvas.width*canvas.height*4);g.readPixels(0,0,canvas.width,canvas.height,g.RGBA,g.UNSIGNED_BYTE,data);let red=0,blue=0,sumX=0;for(let i=0;i<data.length;i+=4){if(data[i]>220&&data[i+1]<60&&data[i+2]<60)red++;if(data[i]<80&&data[i+1]>80&&data[i+1]<170&&data[i+2]>240){blue++;sumX+=(i/4)%canvas.width;}}return {red,blue,blueX:blue?sumX/blue:null};}"""
+  before_pixels=ar.evaluate(pixel_check);assert before_pixels['red']>0 and before_pixels['blue']>0,before_pixels
+  ar.evaluate('window.__xrTest.cameraX=.12');ar.wait_for_timeout(350)
+  after_pixels=ar.evaluate(pixel_check);assert after_pixels['blue']>0 and after_pixels['blueX']<before_pixels['blueX']-3,(before_pixels,after_pixels)
+  ar.evaluate('window.__xrTest.cameraX=0');ar.wait_for_timeout(200)
+  metrics=ar.evaluate("""async () => { const out={build:[],submit:[],diagnostic:[]};let last=null;for(let i=0;i<45;i++){await new Promise(requestAnimationFrame);const d=window.__arplay.spatialDebug(),s=window.__arplay.spatial();out.build.push(d.buildMs);out.submit.push(d.drawMs);if(s.diagnosticTime!==last){last=s.diagnosticTime;out.diagnostic.push(s.diagnosticMs)}}return out; }""")
+  def summary(values):
+   values=sorted(v for v in values if v is not None)
+   assert values
+   return {'n':len(values),'medianMs':values[len(values)//2],'p95Ms':values[min(len(values)-1,int(len(values)*.95))],'maxMs':max(values)}
+  print('BENCHMARK XR SIMULATED '+json.dumps({key:summary(value) for key,value in metrics.items()}),flush=True)
+  ar.locator('#depthToggle').click();ar.wait_for_timeout(250)
+  assert ar.evaluate('window.__arplay.spatialDebug().enabled') is True
+  if os.environ.get('PREVIEW'):
+   ar.evaluate("document.querySelector('#gl').style.cssText='position:fixed;inset:0;width:100vw;height:100vh;opacity:1';document.querySelector('#view').style.opacity='0'")
+   ar.wait_for_timeout(100);ar.screenshot(path=str(Path(os.environ['PREVIEW']).with_name('simulated-3d-'+Path(os.environ['PREVIEW']).name)))
+   ar.evaluate("document.querySelector('#gl').style.cssText='';document.querySelector('#view').style.opacity='1'")
+  ar.locator('#depthToggle').click();ar.locator('#spatialDebugToggle').uncheck()
+  ar.wait_for_function('window.__arplay.spatialDebug().vertices === 0')
   ar.locator('#collisionVisualToggle').check();ar.wait_for_function('!document.querySelector("#collisionMap").hidden')
   ar.locator('#collisionMap').scroll_into_view_if_needed()
   assert ar.evaluate("() => { const pixels=document.querySelector('#collisionMap').getContext('2d').getImageData(0,0,128,128).data; for(let i=1;i<pixels.length;i+=4) if(pixels[i]>180 && pixels[i]>pixels[i-1] && pixels[i]>pixels[i+1]) return true; return false; }")

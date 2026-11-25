@@ -27,3 +27,6 @@ export function invert4(out,m,work=new Float64Array(32)){
  for(let r=0;r<4;r++)for(let c=0;c<4;c++){let v=work[r*8+c+4];if(!Number.isFinite(v))return false;out[c*4+r]=v;}
  return true;
 }
+
+// Existing camera-relative AR convention: project the camera right axis onto XZ.
+export function cameraXZ(x,z,pose,out){const n=Math.max(1,Math.hypot(x,z));x/=n;z/=n;const a=pose?pose[0]:1,b=pose?pose[2]:0,h=Math.hypot(a,b)||1;out[0]=(a*x-b*z)/h;out[1]=(b*x+a*z)/h;return out;}

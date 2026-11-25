@@ -43,14 +43,16 @@ export class CollisionResolver {
     }
     return desired + map.config.cellSize;
   }
-  canEnter(map, x, z, volume, time, limit) {
-    if (map.penetration(x, z, volume, time, this.skin) <= limit) return true;
+  canEnter(map, x, z, volume, time, limit, fromX=x, fromZ=z, escape=false) {
+    const depth=map.penetration(x,z,volume,time,this.skin);
+    if (escape ? map.allowsMove(fromX,fromZ,x,z,volume,time,this.skin,true) : depth<=limit && (!limit || map.allowsMove(fromX,fromZ,x,z,volume,time,this.skin))) return true;
+    this.reason=map.rejectedReason||'contact-worsening';this.before=map.rejectedBefore??limit;this.after=map.rejectedAfter??depth;this.distance=map.rejectedDistance??null;
     this.blockedBits |= map.contactBits ?? 1;
     this.confirmationTime = Math.max(this.confirmationTime, map.contactTime ?? -Infinity);
     return false;
   }
   move(map, position, dx, dz, volume, time) {
-    this.blockedBits = 0; this.confirmationTime = -Infinity;
+    this.blockedBits = 0; this.confirmationTime = -Infinity; this.reason=''; this.before=this.after=this.distance=null;
     const out = this.result, startX = position[0], startZ = position[2];
     let x = startX, z = startZ, escape = 0, escapeAttempted = false;
     const wantedX = dx, wantedZ = dz;
@@ -65,28 +67,28 @@ export class CollisionResolver {
       // while forbidding increased penetration. Never displace an idle character.
       const limit = overlap > 0 ? overlap + 1e-8 : 0;
       if (!overlap) escape = 0;
-      const allowed = this.canEnter(map, x + sx, z + sz, volume, time, limit);
+      const allowed = this.canEnter(map, x + sx, z + sz, volume, time, limit, x, z);
       // Only pay for the bounded deep-overlap exit search when local relief fails.
       if (!allowed && overlap > 0 && !escapeAttempted) {
-        escape = this.escapeAllowed(map, x, z, dx, dz, volume, time); escapeAttempted = true;
+        escape = !map.collides(startX+dx,startZ+dz,volume,time,this.skin) ? this.escapeAllowed(map,x,z,dx,dz,volume,time) : 0; escapeAttempted = true;
       }
-      if ((overlap > 0 && escape > 0) || allowed) {
+      if ((overlap > 0 && escape > 0 && this.canEnter(map,x+sx,z+sz,volume,time,limit,startX,startZ,true)) || allowed) {
         x += sx; z += sz; escape -= Math.hypot(sx, sz); continue;
       }
       // Axis projection permits retreat and tangential sliding; never move without input.
       if (Math.abs(sx) >= Math.abs(sz)) {
-        if (sx && this.canEnter(map, x + sx, z, volume, time, limit)) x += sx;
-        if (sz && this.canEnter(map, x, z + sz, volume, time, Math.max(0, map.penetration(x, z, volume, time, this.skin) + (overlap ? 1e-8 : 0)))) z += sz;
+        if (sx && this.canEnter(map, x + sx, z, volume, time, limit, x,z)) x += sx;
+        if (sz && this.canEnter(map, x, z + sz, volume, time, Math.max(0, map.penetration(x, z, volume, time, this.skin) + (overlap ? 1e-8 : 0)),x,z)) z += sz;
       } else {
-        if (sz && this.canEnter(map, x, z + sz, volume, time, limit)) z += sz;
-        if (sx && this.canEnter(map, x + sx, z, volume, time, Math.max(0, map.penetration(x, z, volume, time, this.skin) + (overlap ? 1e-8 : 0)))) x += sx;
+        if (sz && this.canEnter(map, x, z + sz, volume, time, limit,x,z)) z += sz;
+        if (sx && this.canEnter(map, x + sx, z, volume, time, Math.max(0, map.penetration(x, z, volume, time, this.skin) + (overlap ? 1e-8 : 0)),x,z)) x += sx;
       }
     }
     const blockedX = Math.abs(x - startX - wantedX) > 1e-5, blockedZ = Math.abs(z - startZ - wantedZ) > 1e-5;
     out.x = x; out.z = z; out.blocked = blockedX || blockedZ; out.steps = steps;
     out.direction = (blockedX ? (wantedX > 0 ? 'X+' : 'X−') : '') + (blockedX && blockedZ ? '/' : '') + (blockedZ ? (wantedZ > 0 ? 'Z+' : 'Z−') : '');
     out.coverage = map.coverage(x, z, volume, time);
-    out.sourceBits = this.blockedBits; out.confirmationTime = this.confirmationTime;
+    out.reason=out.blocked?(this.reason||'movement-budget'):null;out.distance=this.distance;out.before=this.before;out.after=this.after;out.sourceBits = this.blockedBits; out.confirmationTime = this.confirmationTime;
     return out;
   }
 }
@@ -106,7 +108,14 @@ export class ARCollisions {
       config: this.map.config,
       coverage: (x, z, volume, time) => this.map.coverage(x, z, volume, time),
       collides: (x, z, volume, time, skin) => this.field.penetration(x, z, volume, time, skin) > 0,
+      allowsMove: (x,z,nx,nz,volume,time,skin,escape=false)=>{
+        const a=this.map.allowsMove(x,z,nx,nz,volume,time,skin,escape), b=this.probe.allowsMove(x,z,nx,nz,volume,time,skin,escape);
+        const failed=!a?this.map:!b?this.probe:null;
+        this.field.rejectedReason=failed?.motionReason??null;this.field.rejectedBefore=failed?.motionBefore??null;this.field.rejectedAfter=failed?.motionAfter??null;this.field.rejectedDistance=failed?.motionDistance??null;
+        this.field.contactBits=(!a?1:0)|(!b?2:0);this.field.contactTime=Math.max(this.map.contactTime,this.probe.contactTime);return a&&b;
+      },
       penetration: (x, z, volume, time, skin) => {
+        this.field.rejectedReason=this.field.rejectedBefore=this.field.rejectedAfter=this.field.rejectedDistance=null;
         const map = this.map.penetration(x, z, volume, time, skin);
         const probe = this.probe.penetration(x, z, volume, time, skin);
         this.field.contactBits = (map > 0 ? 1 : 0) | (probe > 0 ? 2 : 0);
@@ -120,10 +129,14 @@ export class ARCollisions {
     this.volume = characterVolume('bip', 1, 0); this.result = {x: 0, z: 0};
     this.stop();
     if (elements.copyButton) elements.copyButton.onclick = async () => { try { await navigator.clipboard.writeText(this.diagnosticText()); elements.copyButton.textContent = 'Copiado'; } catch { elements.copyButton.textContent = 'Copia indisponivel'; } };
+    if(elements.debugToggle) elements.debugToggle.onchange=()=>{this.debug3D=!!elements.debugToggle.checked&&this.enabled;};
     if (elements.toggle) elements.toggle.onchange = () => this.setEnabled(!!elements.toggle.checked);
     if (elements.visualToggle) elements.visualToggle.onchange = () => { this.visual = !!elements.visualToggle.checked && this.enabled; this.lastDraw = -Infinity; };
   }
-  setIntent(x, z, time) { const n=Math.hypot(x,z),old=Math.hypot(this.intentX,this.intentZ); if(n>1e-8 && (!old || (x*this.intentX+z*this.intentZ)/(n*old)<.5)) this.probe.lastUpdate=-Infinity; this.intentX=x; this.intentZ=z; this.intentTime=n>1e-8 ? time : -Infinity; }
+  setInput(x,z){this.rawX=x;this.rawZ=z;}
+  supportAt(x,z){return this.anchored&&Math.abs(this.normal[1])>1e-8?this.anchor[1]-((x-this.anchor[0])*this.normal[0]+(z-this.anchor[2])*this.normal[2])/this.normal[1]:null;}
+  noteRendered(base,shadow,jump){this.renderedBase=Number.isFinite(base)?base:null;this.shadowY=shadow;this.jumpY=jump;if(this.eventCount){const e=this.events[(this.eventCursor+31)%32];if(e.time===this.time){e.renderedBase=this.renderedBase;e.supportDifference=this.renderedBase===null?null:this.renderedBase-this.volume.ground;e.shadowY=shadow;e.visualJump=jump;}}if(this.lastBlockAvailable&&this.lastBlock.time===this.time){this.lastBlock.renderedBase=this.renderedBase;this.lastBlock.supportDifference=this.renderedBase==null?null:this.renderedBase-this.volume.ground;this.lastBlock.shadowY=shadow;this.lastBlock.visualJump=jump;}}
+  setIntent(x, z, time) { this.controlX=x;this.controlZ=z;const n=Math.hypot(x,z),old=Math.hypot(this.intentX,this.intentZ); if(n>1e-8 && (!old || (x*this.intentX+z*this.intentZ)/(n*old)<.5)) this.probe.lastUpdate=-Infinity; this.intentX=x; this.intentZ=z; this.intentTime=n>1e-8 ? time : -Infinity; }
   probeState(time = this.time) {
     if (time-this.intentTime>=150) return 'inativa: sem movimento';
     if (!this.tracking) return 'aguardando pose';
@@ -131,7 +144,7 @@ export class ARCollisions {
     return this.probe.inactiveReason;
   }
   diagnosticText() {
-    return JSON.stringify({version:'1.1.2',state:this.snapshot(),events:Array.from({length:this.eventCount},(_,i)=>this.events[(this.eventCursor-this.eventCount+i+32)%32])},null,2);
+    return JSON.stringify({version:'1.1.3',lastBlock:this.lastBlockAvailable?{...this.lastBlock,ageMs:Math.max(0,this.time-this.lastBlock.time)}:null,state:this.snapshot(),events:Array.from({length:this.eventCount},(_,i)=>this.events[(this.eventCursor-this.eventCount+i+32)%32])},null,2);
   }
   start(capability) { this.stop(); this.sessionActive = true; this.available = capability === 'waiting'; }
   setCharacter(id, scale, position) { this.characterId=id; this.characterScale=scale; characterVolume(id, scale, position[1], this.volume); this.position.set(position); }
@@ -261,15 +274,18 @@ export class ARCollisions {
     } else this.fastUpdates = 0;
   }
   move(position, dx, dz, time) {
+    const moveStarted=this.now();
     if (this.enabled && Math.hypot(dx, dz) > 1e-8) {
       this.intentX = dx; this.intentZ = dz; this.intentTime = time;
     }
+    this.penetrationBefore=this.penetrationTarget=null;
+    if(this.enabled && this.anchored && this.supportValid){this.penetrationBefore=this.field.penetration(position[0],position[2],this.volume,time,this.resolver.skin);this.penetrationTarget=this.field.penetration(position[0]+dx,position[2]+dz,this.volume,time,this.resolver.skin);}
     this.result.x = position[0] + dx; this.result.z = position[2] + dz;
     this.blocked = false; this.direction = ''; this.blockSource = '';
     if (this.enabled && this.anchored && this.supportValid && (this.map.occupiedCount > 0 || this.probe.count > 0)) {
-      const started = this.now(), solved = this.resolver.move(this.field, position, dx, dz, this.volume, time);
+      const solved = this.resolver.move(this.field, position, dx, dz, this.volume, time);
       this.result.x = solved.x; this.result.z = solved.z; this.blocked = solved.blocked; this.direction = solved.direction;
-      this.coverage = solved.coverage; this.queryMs = Math.max(0, this.now() - started);
+      this.coverage = solved.coverage; this.queryMs = Math.max(0, this.now() - moveStarted);
       if (this.blocked) {
         this.blockSource = solved.sourceBits === 3 ? 'ambos' : solved.sourceBits === 2 ? 'sonda imediata' : solved.sourceBits === 1 ? 'mapa persistente' : 'limite de deslocamento';
         this.blockConfirmation = solved.confirmationTime;
@@ -278,15 +294,22 @@ export class ARCollisions {
     } else if (this.enabled && this.anchored && this.supportValid) {
       this.coverage = this.map.coverage(this.result.x, this.result.z, this.volume, time);
     }
+    if(this.enabled)this.queryMs=Math.max(0,this.now()-moveStarted);
     if (this.enabled && Math.hypot(dx,dz)>1e-8) {
       if(time-this.lastSlotTime>=250){this.eventCursor=(this.eventCursor+1)%32;this.eventCount=Math.min(32,this.eventCount+1);this.lastSlotTime=time;}
       const event=this.events[(this.eventCursor+31)%32];
+      event.rawX=this.rawX;event.rawZ=this.rawZ;event.transformedX=this.controlX;event.transformedZ=this.controlZ;
+      event.probeDirectionX=this.probe.directionX;event.probeDirectionZ=this.probe.directionZ;event.probeTime=Number.isFinite(this.probe.acquiredTime)?this.probe.acquiredTime:null;
+      event.previousX=position[0];event.previousY=position[1];event.previousZ=position[2];event.wantedY=event.finalY=position[1];event.wantedX=position[0]+dx;event.wantedZ=position[2]+dz;event.finalX=this.result.x;event.finalZ=this.result.z;
+      event.penetrationBefore=this.penetrationBefore;event.penetrationTarget=this.penetrationTarget;event.contactBefore=this.blocked?this.resolver.result.before:null;event.contactTarget=this.blocked?this.resolver.result.after:null;event.rejection=this.blocked?this.resolver.result.reason:null;
+      event.contactDistance=this.blocked?this.resolver.result.distance:null;event.evidenceAge=this.blocked&&Number.isFinite(this.blockConfirmation)?Math.max(0,time-this.blockConfirmation):null;
+      event.supportPlaneYAtCharacter=this.supportAt(this.result.x,this.result.z);event.supportY=this.volume.ground;event.supportNormalX=this.normal[0];event.supportNormalY=this.normal[1];event.supportNormalZ=this.normal[2];event.renderedBase=this.renderedBase;event.supportDifference=this.renderedBase==null?null:this.renderedBase-this.volume.ground;event.shadowY=this.shadowY;event.visualJump=this.jumpY;
       event.time=time;event.dx=dx;event.dz=dz;event.actualX=this.result.x-position[0];event.actualZ=this.result.z-position[2];
       event.source=this.blockSource;event.coverage=this.coverage;event.probe=this.probeState(time);event.samples=this.probe.used;
       event.projected=this.probe.projected;event.invalid=this.probe.rejectDepth;event.duplicates=this.probe.rejectDuplicate;event.geometry=this.probe.rejectGeometry;
       event.interval=this.interval;event.hz=this.hz;event.radius=this.volume.radius;event.height=this.volume.height;event.scale=this.characterScale;event.character=this.characterId;
       event.reconstruction=this.reconstructionMs;event.query=this.queryMs;event.probeMs=this.probe.costMs;event.fps=this.frameDt>0?1/this.frameDt:null;event.depth=this.depthState;
-      this.lastEvent=time;
+      this.lastEvent=time;if(this.blocked){Object.assign(this.lastBlock,event);this.lastBlockAvailable=true;}
     }
     this.position[0] = this.result.x; this.position[2] = this.result.z;
     return this.result;
@@ -302,6 +325,7 @@ export class ARCollisions {
     return 'active';
   }
   snapshot() {
+    const planeY=this.supportAt(this.position[0],this.position[2]);
     return {enabled: this.enabled, phase: this.phase(), used: this.used, sampled: this.sampled,
       occupied: this.map.occupiedCount, cells: this.map.cells.size, freeCells: this.map.free.size,
       hz: this.hz, reconstructionMs: this.reconstructionMs, queryMs: this.queryMs,
@@ -311,11 +335,13 @@ export class ARCollisions {
       probeSupport: this.probe.support, probeMs: this.probe.costMs, probeState:this.probeState(), eventCount:this.eventCount, lastEventAge:Number.isFinite(this.lastEvent)?Math.max(0,this.time-this.lastEvent):null, configuredHz:1000/this.interval, probeProjected:this.probe.projected, rejectDepth:this.probe.rejectDepth, rejectDuplicate:this.probe.rejectDuplicate, rejectGeometry:this.probe.rejectGeometry, probeValid: this.probe.valid, probeDistinct: this.probe.distinct, probeInRegion: this.probe.inRegionCount, probeRejectDepth: this.probe.rejectDepth, probeRejectDuplicate: this.probe.rejectDuplicate, probeRejectGeometry: this.probe.rejectGeometry,
       confirmationAgeMs: this.blocked && Number.isFinite(this.blockConfirmation) ? Math.max(0, this.time - this.blockConfirmation) : null,
       coverageInsufficient: this.coverage < .6 || this.depthState !== 'available',
+      debug3D:this.debug3D, debugVertices:this.debugStats?.count||0, debugBuildMs:this.debugStats?.buildMs??null, debugDrawMs:this.debugStats?.drawMs??null, diagnosticMs:this.diagnosticMs??null, diagnosticTime:Number.isFinite(this.lastRender)?this.lastRender:null,
+      supportPlaneYAtCharacter:planeY,baseVsSupportPlane:this.renderedBase==null||planeY===null?null:this.renderedBase-planeY,supportY:this.anchored?this.volume.ground:null, renderedBase:this.renderedBase??null, supportDifference:this.renderedBase==null?null:this.renderedBase-this.volume.ground,shadowY:this.shadowY??null,visualJump:this.jumpY??null,lastBlockAge:this.lastBlockAvailable?Math.max(0,this.time-this.lastBlock.time):null,
       lastBlockedDirection: this.time - this.lastBlockedTime < 900 ? this.lastBlockedDirection : ''};
   }
   render(time, diagnosticOpen) {
     if (time - this.lastRender < 250) return;
-    this.lastRender = time;
+    const diagnosticStarted=this.now();this.lastRender = time;
     const {status, readout, canvas, visualToggle} = this.elements;
     if (status) { status.hidden = !this.enabled; status.textContent = STATES[this.phase()]; }
     if (visualToggle) visualToggle.disabled = !this.enabled;
@@ -323,6 +349,10 @@ export class ARCollisions {
       `Pontos úteis: ${this.used}/${this.sampled}\nCélulas ocupadas: ${this.map.occupiedCount} (limite ${this.map.config.maxCells})\nAtualização espacial: ${this.hz ? this.hz.toFixed(1) + ' Hz' : '—'}\nReconstrução: ${this.reconstructionMs === null ? '—' : this.reconstructionMs.toFixed(2) + ' ms'}\nConsulta: ${this.queryMs === null ? '—' : this.queryMs.toFixed(2) + ' ms'}\nCobertura amostrada: ${Math.round(this.coverage * 100)}% (${STATES[this.phase()]})\nDireção bloqueada (XR): ${this.direction || '—'}\nOrigem do bloqueio: ${this.blockSource || 'sem bloqueio atual'}\nSonda: ${this.probe.used}/${this.probe.tested} amostras; apoio local ${this.probe.support} (não é precisão)\nCusto da sonda: ${this.probe.costMs === null ? '—' : this.probe.costMs.toFixed(2) + ' ms'}\nConfirmação do bloqueio: ${this.blocked && Number.isFinite(this.blockConfirmation) ? Math.max(0, time - this.blockConfirmation).toFixed(0) + ' ms atrás' : '—'}\nCobertura: ${this.coverage < .6 || this.depthState !== 'available' ? 'insuficiente; desconhecido não comprova livre' : 'amostrada; não garante espaço livre'}` : '';
     if (readout && this.enabled && diagnosticOpen) readout.textContent += '\nSonda: '+this.probeState(time)+'\nEventos: '+this.eventCount+'; idade: '+(Number.isFinite(this.lastEvent)?(time-this.lastEvent).toFixed(0):'--')+' ms\nAquisicao: '+this.depthState+'\nHz configurado: '+(1000/this.interval).toFixed(1)+'\nProjetados / invalidos / repetidos / geometria: '+[this.probe.projected,this.probe.rejectDepth,this.probe.rejectDuplicate,this.probe.rejectGeometry].join(' / ');
     if (readout && this.enabled && diagnosticOpen && this.eventCount) { const e=this.events[(this.eventCursor+31)%32]; readout.textContent+='\nUltimo movimento: '+[e.dx,e.dz].map(v=>v.toFixed(3)).join(',')+' m; efetivo: '+[e.actualX,e.actualZ].map(v=>v.toFixed(3)).join(',')+' m; origem: '+(e.source||'sem bloqueio'); }
+    if(this.elements.debugToggle)this.elements.debugToggle.disabled=!this.enabled;
+    if(readout&&this.enabled&&diagnosticOpen)readout.textContent+='\nApoio Y: '+this.volume.ground.toFixed(3)+' m; base renderizada: '+(this.renderedBase==null?'indisponível':this.renderedBase.toFixed(3)+' m')+'\nÚltimo bloqueio preservado: '+(this.lastBlockAvailable?Math.max(0,time-this.lastBlock.time).toFixed(0)+' ms; '+this.lastBlock.source:'indisponível');
+    if(readout&&this.enabled&&diagnosticOpen)readout.textContent+='\nPlano no personagem: '+(this.supportAt(this.position[0],this.position[2])?.toFixed(3)??'indisponível')+' m';
+    this.diagnosticMs=Math.max(0,this.now()-diagnosticStarted);
     if (!canvas) return;
     canvas.hidden = !this.enabled || !this.visual || !diagnosticOpen;
     if (canvas.hidden || time - this.lastDraw < 500) return;
@@ -337,7 +367,7 @@ export class ARCollisions {
       const x = o[0] + cell.ix * s, z = o[2] + cell.iz * s;
       c.fillRect(64 + (x - this.position[0]) * scale, 64 + (z - this.position[2]) * scale, Math.max(1, s * scale), Math.max(1, s * scale));
     }
-    c.strokeStyle = '#b7f36e'; c.lineWidth = 1; c.beginPath(); c.arc(64, 64, this.volume.radius * scale, 0, 2 * Math.PI); c.stroke();
+    c.strokeStyle = '#b7f36e'; c.lineWidth = 1; c.beginPath(); c.arc(64, 64, this.volume.radius * scale, 0, 2 * Math.PI); c.stroke();this.diagnosticMs=Math.max(0,this.now()-diagnosticStarted);
   }
   stop() {
     this.clearProbe();
@@ -361,6 +391,9 @@ export class ARCollisions {
     if (this.elements.canvas) this.elements.canvas.hidden = true;
   }
   clearProbe() {
+    this.lastBlock ||= {};for(const key of Object.keys(this.lastBlock))delete this.lastBlock[key];this.lastBlockAvailable=false;
+    this.rawX=this.rawZ=this.controlX=this.controlZ=null;this.renderedBase=this.shadowY=this.jumpY=null;
+    this.debug3D=false;if(this.elements.debugToggle)this.elements.debugToggle.checked=false;
     this.events ||= Array.from({length:32},()=>({})); for(const event of this.events) for(const key of Object.keys(event)) delete event[key]; this.eventCount=this.eventCursor=0;this.lastEvent=this.lastSlotTime=-Infinity;
     this.probe.clear(); this.intentX = this.intentZ = 0; this.intentTime = -Infinity;
     this.probeInterval = 66; this.blockSource = ''; this.blockConfirmation = -Infinity;
