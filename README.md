@@ -46,17 +46,15 @@ Câmera física, sensores, instalação no Android e ARCore exigem validação n
 
 Workflow: [deploy-pages.yml](.github/workflows/deploy-pages.yml), baseado no [mecanismo oficial do GitHub Pages](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages).
 
-**URL pública:** publicação em preparação para `https://jvt13.github.io/ar-play/`. A disponibilidade ainda depende da conclusão do deploy.
+**URL pública:** [Abrir AR Play](https://jvt13.github.io/ar-play/).
 
-1. Autentique o GitHub CLI com `gh auth login --hostname github.com --git-protocol https --web --scopes workflow`. Não coloque credenciais no projeto.
-2. Após autorização expressa para tornar o código público, crie um repositório novo `ar-play` na conta desejada. Se o nome já existir, interrompa e escolha um destino autorizado; não sobrescreva o repositório existente. Vincule esse destino ao remote `origin`.
-3. Em **Settings → Pages → Build and deployment → Source**, selecione **GitHub Actions**.
-4. Envie a branch `main` com `git push -u origin main`. Também é possível executar manualmente **Actions → Deploy GitHub Pages → Run workflow**, selecionando `main`.
-5. Aguarde os testes e o deploy terminarem com sucesso; confirme HTTP 200 na URL e nos recursos. Registre a URL efetiva neste README.
+**Repositório:** [jvt13/ar-play](https://github.com/jvt13/ar-play).
+
+O GitHub Pages usa **GitHub Actions** como fonte de publicação. Cada push em `main` executa os testes e publica somente após sua aprovação. Para acompanhar o resultado ou executar manualmente, abra [Actions → Deploy GitHub Pages](https://github.com/jvt13/ar-play/actions/workflows/deploy-pages.yml) e selecione `main` em **Run workflow**. Aguarde o deploy terminar com sucesso e confirme a aplicação na URL acima.
 
 O workflow exige aprovação dos testes Node, sintaxe e navegador antes de enviar o artefato ao Pages. Copia apenas `index.html`, `style.css`, `manifest.webmanifest`, `sw.js`, `src/` e `icons/` para um diretório temporário do runner. Servidor local, testes, relatórios, configurações e metadados do repositório não integram o site. A pasta `reports/` é exclusivamente local e está excluída do versionamento. A permissão de escrita no Pages e o token de identidade ficam limitados ao job de deploy.
 
-Para atualizações futuras, altere a versão em `package.json` e o identificador `CACHE` em `sw.js`, registre o changelog, execute os testes e envie para `main`. O novo worker pré-carrega os arquivos, remove caches `ar-play-` antigos e assume o controle. Recarregue abas já abertas após a atualização para executar os módulos da nova versão. Preserve caminhos relativos, `start_url` e `scope` como `./`.
+Para futuras versões do aplicativo, altere a versão em `package.json` e o identificador `CACHE` em `sw.js`, registre o changelog e execute `npm test`, `npm run check` e `python tests/browser_test.py`. Faça commit dos arquivos públicos e de desenvolvimento necessários e envie com `git push origin main`. Relatórios em `reports/` devem permanecer exclusivamente locais. Aguarde o workflow e valide a URL publicada; para usar a suíte contra produção, defina `BASE_URL=https://jvt13.github.io/ar-play/` no ambiente antes de executar o teste de navegador. O novo worker pré-carrega os arquivos, remove caches `ar-play-` antigos e assume o controle. Recarregue abas já abertas após a atualização para executar os módulos da nova versão. Preserve caminhos relativos, `start_url` e `scope` como `./`.
 
 ## Checklist de aceitação no celular
 
