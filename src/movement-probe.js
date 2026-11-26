@@ -20,9 +20,10 @@ export class MovementProbe {
     this.samples = new Float64Array(75 * 3); this.ids = new Int32Array(75);
     this.coherent = new Uint8Array(75);
     this.history = new Float64Array(128 * 7); this.point = new Float64Array(3);
-    this.clear();
+    this.contactPoint=new Float64Array(3);this.contactSummary={};this.clear();
   }
   clear() {
+    this.contactPoint.fill(0);this.lastBlockTime=-Infinity;
     this.samples.fill(0); this.ids.fill(-1); this.history.fill(0); this.point.fill(0);
     this.coherent.fill(0); this.sampleCount = 0;
     this.count = this.used = this.tested = this.valid = this.support = 0;
@@ -117,6 +118,15 @@ export class MovementProbe {
       if(Math.floor((this.history[j]-origin[0])/size)!==cell.ix || Math.floor((this.history[j+1]-origin[1])/size)!==cell.iy || Math.floor((this.history[j+2]-origin[2])/size)!==cell.iz)continue;
       this.count--;if(i!==this.count)this.history.copyWithin(j,this.count*7,this.count*7+7);this.history.fill(0,this.count*7,this.count*7+7);
     }
+  }
+  contactAt(x,z,volume,time,skin){
+    let best=Infinity,found=false;
+    for(let i=0;i<this.count;i++){
+      const j=i*7,h=this.history;if(time-h[j+3]>=900||h[j+1]<=volume.ground+this.config.floorTolerance||h[j+1]>=volume.ground+volume.height)continue;
+      const a=Math.max(-h[j+6],Math.min(h[j+6],(x-h[j])*h[j+4]+(z-h[j+2])*h[j+5])),px=h[j]+a*h[j+4],pz=h[j+2]+a*h[j+5],distance=Math.hypot(x-px,z-pz),radius=radiusAt(volume,h[j+1]),gap=distance-radius;
+      if(gap<best&&gap<=skin+this.config.pointMargin+1e-6){best=gap;found=true;this.contactPoint[0]=px;this.contactPoint[1]=h[j+1];this.contactPoint[2]=pz;Object.assign(this.contactSummary,{kind:'sonda',cellId:null,surfaceDistance:distance,volumeRadius:radius,clearance:gap,pointMargin:this.config.pointMargin,skin,ageMs:time-h[j+3],state:'evidência imediata',freeEvidence:0,reason:null,refined:false});}
+    }
+    if(found)this.lastBlockTime=time;return found?this.contactSummary:null;
   }
   allowsMove(x,z,nx,nz,volume,time,skin,escape=false) {
     this.motion=true;this.fromX=x;this.fromZ=z;this.escape=escape;this.motionAllowed=true;this.motionReason=null;this.motionBefore=this.motionAfter=this.motionDistance=null;

@@ -3,6 +3,7 @@ import {clamp} from './math.js';
 import {DepthProjector, SpatialMap} from './spatial-map.js';
 import {MovementProbe} from './movement-probe.js';
 import {SpatialRevalidator} from './revalidation.js';
+import {DiagnosticArchive} from './diagnostics.js';
 
 // Envelopes derived from the unchanged procedural sphere transforms across walking/dancing.
 // Unit scale, all headings; 0.025 model-unit margin, verified against dense model samples in tests.
@@ -47,6 +48,7 @@ export class CollisionResolver {
   canEnter(map, x, z, volume, time, limit, fromX=x, fromZ=z, escape=false) {
     const depth=map.penetration(x,z,volume,time,this.skin);
     if (escape ? map.allowsMove(fromX,fromZ,x,z,volume,time,this.skin,true) : depth<=limit && (!limit || map.allowsMove(fromX,fromZ,x,z,volume,time,this.skin))) return true;
+    if(x!==this.lastNoteX||z!==this.lastNoteZ){map.noteBlocked?.(x,z,volume,time,this.skin);this.lastNoteX=x;this.lastNoteZ=z;}
     this.reason=map.rejectedReason||'contact-worsening';this.before=map.rejectedBefore??limit;this.after=map.rejectedAfter??depth;this.distance=map.rejectedDistance??null;
     this.mapConfirmationTime=Math.max(this.mapConfirmationTime,map.mapContactTime??-Infinity);this.probeConfirmationTime=Math.max(this.probeConfirmationTime,map.probeContactTime??-Infinity);
     this.evidenceBits |= map.contactEvidence??0;this.blockedBits |= map.contactBits ?? 1;
@@ -54,7 +56,7 @@ export class CollisionResolver {
     return false;
   }
   move(map, position, dx, dz, volume, time) {
-    this.mapConfirmationTime=this.probeConfirmationTime=-Infinity;this.evidenceBits=0;this.blockedBits = 0; this.confirmationTime = -Infinity; this.reason=''; this.before=this.after=this.distance=null;
+    this.lastNoteX=this.lastNoteZ=NaN;this.mapConfirmationTime=this.probeConfirmationTime=-Infinity;this.evidenceBits=0;this.blockedBits = 0; this.confirmationTime = -Infinity; this.reason=''; this.before=this.after=this.distance=null;
     const out = this.result, startX = position[0], startZ = position[2];
     let x = startX, z = startZ, escape = 0, escapeAttempted = false;
     const wantedX = dx, wantedZ = dz;
@@ -86,6 +88,19 @@ export class CollisionResolver {
         if (sx && this.canEnter(map, x + sx, z, volume, time, Math.max(0, map.penetration(x, z, volume, time, this.skin) + (overlap ? 1e-8 : 0)),x,z)) x += sx;
       }
     }
+    // Finish within one numerical substep of the actual boundary, without shrinking any volume.
+    // Only free starts are refined; existing-overlap guards above remain authoritative.
+    if(!map.collides(x,z,volume,time,this.skin))for(let axis=0;axis<2;axis++){
+      const remaining=axis?wantedZ-(z-startZ):wantedX-(x-startX);
+      if(Math.abs(remaining)<1e-5)continue;
+      const direction=Math.sign(remaining);
+      // Repeated pushes at a boundary need only a fresh numerical proximity check.
+      // This is not a physical sensor tolerance or a cached obstacle assumption.
+      if(map.collides(x+(axis?0:direction*1e-6),z+(axis?direction*1e-6:0),volume,time,this.skin))continue;
+      const delta=direction*Math.min(step,Math.abs(remaining));let low=0,high=1;
+      for(let i=0;i<16;i++){const f=(low+high)/2;if(map.collides(x+(axis?0:delta*f),z+(axis?delta*f:0),volume,time,this.skin))high=f;else low=f;}
+      if(axis)z+=delta*low;else x+=delta*low;
+    }
     const blockedX = Math.abs(x - startX - wantedX) > 1e-5, blockedZ = Math.abs(z - startZ - wantedZ) > 1e-5;
     out.x = x; out.z = z; out.blocked = blockedX || blockedZ; out.steps = steps;
     out.direction = (blockedX ? (wantedX > 0 ? 'X+' : 'X−') : '') + (blockedX && blockedZ ? '/' : '') + (blockedZ ? (wantedZ > 0 ? 'Z+' : 'Z−') : '');
@@ -102,7 +117,7 @@ const STATES = {
 
 export class ARCollisions {
   constructor(elements = {}, config = {}, now = () => performance.now()) {
-    this.elements = elements; this.now = now;
+    this.elements = elements; this.now = now;this.archive=elements.archive||new DiagnosticArchive(now);this.sessionId=null;this.sessionOrigin=0;
     this.map = new SpatialMap(config); this.projector = new DepthProjector(); this.resolver = new CollisionResolver();
     this.probe = new MovementProbe(this.map.config);
     this.revalidator=new SpatialRevalidator(now);
@@ -110,6 +125,7 @@ export class ARCollisions {
     // A shared collision field lets the same swept/slide solver consult either source.
     this.field = {
       config: this.map.config,
+      noteBlocked:(x,z,volume,time,skin)=>this.map.noteBlocked(x,z,volume,time,skin),
       coverage: (x, z, volume, time) => this.map.coverage(x, z, volume, time),
       collides: (x, z, volume, time, skin) => this.field.penetration(x, z, volume, time, skin) > 0,
       allowsMove: (x,z,nx,nz,volume,time,skin,escape=false)=>{
@@ -129,12 +145,14 @@ export class ARCollisions {
         return Math.max(map, probe);
       },
     };
-    this.depths = new Float32Array(432); this.points = new Float32Array(432 * 3);
+    this.rayTags=new Uint32Array(432);this.rayStamp=0;this.rayCursor=0;this.depths = new Float32Array(432); this.points = new Float32Array(432 * 3);
     this.point = new Float64Array(3); this.position = new Float64Array(3); this.anchor = new Float64Array(3);
     this.normal = new Float64Array(3);
     this.volume = characterVolume('bip', 1, 0); this.result = {x: 0, z: 0};
     this.stop();
-    if (elements.copyButton) elements.copyButton.onclick = async () => { try { await navigator.clipboard.writeText(this.diagnosticText()); elements.copyButton.textContent = 'Copiado'; } catch { elements.copyButton.textContent = 'Copia indisponivel'; } };
+    if(elements.copyButton)elements.copyButton.onclick=async()=>{const result=await this.archive.copy(this.exportText('manual-copy'));elements.copyButton.textContent=result.ok?'Copiado':'Falha na cópia';if(elements.feedback)elements.feedback.textContent=result.message;};
+    if(elements.exportButton)elements.exportButton.onclick=()=>elements.onExport?.(this.exportText('manual-export'));
+    if(elements.clearButton)elements.clearButton.onclick=()=>{this.clearEvents();this.archive.clear();if(elements.feedback)elements.feedback.textContent='Histórico textual limpo. Geometria ativa preservada.';};
     if(elements.debugToggle) elements.debugToggle.onchange=()=>{this.debug3D=!!elements.debugToggle.checked&&this.enabled;};
     if(elements.mappingButton)elements.mappingButton.onclick=()=>this.setGuided(!this.guided);
     if (elements.toggle) elements.toggle.onchange = () => this.setEnabled(!!elements.toggle.checked);
@@ -155,13 +173,17 @@ export class ARCollisions {
     if (this.probe.lastUpdate<this.intentTime && time-this.probe.lastUpdate>this.probeInterval) return 'aguardando aquisicao';
     return this.probe.inactiveReason;
   }
-  diagnosticText() {
-    return JSON.stringify({version:'1.1.4',lastBlock:this.lastBlockAvailable?{...this.lastBlock,ageMs:Math.max(0,this.time-this.lastBlock.time)}:null,state:this.snapshot(),events:Array.from({length:this.eventCount},(_,i)=>this.events[(this.eventCursor-this.eventCount+i+32)%32])},null,2);
+  exportText(reason='manual-export') {
+    const events=[];for(let i=0;i<this.eventCount;i++)events.push(this.events[(this.eventCursor-this.eventCount+i+32)%32]);
+    this.archive.capture(this.sessionId,this.sessionOrigin,reason,events,this.lastBlockAvailable?this.lastBlock:null,this.snapshot());return this.archive.text();
   }
-  start(capability) { this.stop(); this.sessionActive = true; this.available = capability === 'waiting'; }
+  diagnosticText() {
+    return JSON.stringify({version:'1.1.5',session:this.sessionId,lastMapClearReason:this.lastMapClearReason,lastBlock:this.lastBlockAvailable?{...this.lastBlock,ageMs:Math.max(0,this.time-this.lastBlock.time)}:null,state:this.snapshot(),events:Array.from({length:this.eventCount},(_,i)=>this.events[(this.eventCursor-this.eventCount+i+32)%32])},null,2);
+  }
+  start(capability) { this.stop('new-session');this.sessionId=this.archive.begin();this.sessionOrigin=this.now();this.mapGeneration=0;this.suspended=false; this.sessionActive = true; this.available = capability === 'waiting'; }
   setCharacter(id, scale, position) { this.characterId=id; this.characterScale=scale; characterVolume(id, scale, position[1], this.volume); this.position.set(position); }
   place(position, support = 1) {
-    this.clearProbe();
+    this.clearProbe('reposition');
     this.anchor.set(position); this.position.set(position); this.anchored = true;
     this.normal[0] = typeof support === 'number' ? 0 : support[4];
     this.normal[1] = typeof support === 'number' ? support : support[5];
@@ -176,7 +198,7 @@ export class ARCollisions {
     this.projector.clear(); this.depths.fill(0); this.points.fill(0); this.point.fill(0);
   }
   clearReference() {
-    this.clearProbe();
+    this.clearProbe('reference-reset');
     this.anchored = false; this.supportValid = false; this.map.clear(); this.projector.clear();
     this.depths.fill(0); this.points.fill(0); this.used = this.sampled = this.updates = 0;
     this.lastData = this.lastSample = -Infinity; this.coverage = 0; this.blocked = false; this.direction = '';
@@ -185,7 +207,7 @@ export class ARCollisions {
     this.depthState = 'waiting'; this.hz = 0; this.reconstructionMs = this.queryMs = null;
   }
   setEnabled(enabled) {
-    this.clearProbe();
+    this.clearProbe(enabled?'collisions-enabled':'collisions-disabled');
     this.enabled = !!enabled && this.sessionActive;
     this.map.clear(this.anchored && this.supportValid ? this.anchor : null, this.normal);
     this.projector.clear(); this.point.fill(0);
@@ -200,12 +222,13 @@ export class ARCollisions {
     this.context?.clearRect(0, 0, 128, 128);
     if (this.elements.toggle) this.elements.toggle.checked = this.enabled;
   }
+  setVisibility(state){this.suspended=state!=='visible';this.visibilityState=state;this.previousFrame=NaN;}
   frame(time, poseValid) {
-    if (!this.enabled) return;
+    if (!this.enabled||this.suspended) return;
     this.time = time; this.frameDt = Number.isFinite(this.previousFrame) ? Math.max(0, time - this.previousFrame) / 1000 : .05; this.previousFrame = time; if (!Number.isFinite(this.enabledAt)) this.enabledAt = time;
     this.blocked = false; this.direction = ''; this.blockSource = '';
     if (!poseValid && this.tracking) {
-      this.clearProbe();
+      this.clearProbe('tracking-invalid');
       this.map.clear(this.anchored && this.supportValid ? this.anchor : null, this.normal);
       this.projector.clear(); this.depths.fill(0); this.points.fill(0);
       this.coverage = 0; this.lastData = -Infinity; this.updates = 0;
@@ -219,7 +242,7 @@ export class ARCollisions {
     }
   }
   wantsDepth(time) {
-    return this.enabled && this.available && this.anchored && this.supportValid && this.tracking &&
+    return !this.suspended && this.enabled && this.available && this.anchored && this.supportValid && this.tracking &&
       (time - this.lastSample >= this.interval || (time - this.intentTime < 150 && time - this.probe.lastUpdate >= this.probeInterval));
   }
   missing(time, reason) {
@@ -228,68 +251,73 @@ export class ARCollisions {
     this.depths.fill(0); this.points.fill(0); this.point.fill(0);
   }
   accept(time, reader, info, view) {
+    const projectionStart=this.now();
     if (!this.projector.configure(info, view)) { this.missing(time, 'geometry'); return; }
+    this.projectionMs=Math.max(0,this.now()-projectionStart);
     const mapDue = time - this.lastSample >= this.interval;
     this.map.centerX = this.position[0]; this.map.centerZ = this.position[2]; this.map.height = this.volume.height;
     if (time - this.intentTime < 150 && time - this.probe.lastUpdate >= this.probeInterval) {
       const probeStarted = this.now();
       this.probe.update(time, reader, this.projector, view.projectionMatrix, this.position, this.volume, this.intentX, this.intentZ, this.map);
-      this.probe.costMs = Math.max(0, this.now() - probeStarted);
-      this.probeInterval = this.probe.costMs > 2 ? 125 : 66;
+      this.probe.costMs = Math.max(0, this.now() - probeStarted);this.probeInterval = this.probe.costMs > 2 ? 125 : 66;
     }
     if (!mapDue) return;
-    this.lastSample = time;
-    const mapStarted = this.now();
-    const columns = this.columns, rows = this.rows, n = columns * rows;
-    this.depths.fill(0); this.sampled = n;
-    for (let y = 0; y < rows; y++) for (let x = 0; x < columns; x++) {
-      const d = reader.at((x + .5) / columns, (y + .5) / rows, true);
-      if (d !== null && d >= .15 && d <= 6) this.depths[y * columns + x] = d;
+    this.lastSample = time;const mapStarted=this.now(),columns=this.columns,rows=this.rows;
+    this.depths.fill(0);this.sampled=columns*rows;
+    for(let y=0;y<rows;y++)for(let x=0;x<columns;x++){
+      const d=reader.at((x+.5)/columns,(y+.5)/rows,true);if(d!==null&&d>=.15&&d<=6)this.depths[y*columns+x]=d;
     }
-    let count = 0;
-    this.map.begin(time, this.position, this.volume.height, this.projector.pose);
-    // Dense local evidence also fills gaps in the persistent map, with the same temporal votes.
-    // Only observations actually acquired this frame may vote; cached contacts never refresh it.
-    if (this.probe.lastUpdate === time) for (let i = 0; i < this.probe.sampleCount; i++) {
-      if (this.probe.coherent[i]) this.map.observe(this.probe.samples[i * 3], this.probe.samples[i * 3 + 1], this.probe.samples[i * 3 + 2]);
+    this.gridReadMs=Math.max(0,this.now()-mapStarted);const pointStarted=this.now();let count=0;
+    for(let y=0;y<rows;y++)for(let x=0;x<columns;x++){
+      const i=y*columns+x,d=this.depths[i];if(!d)continue;
+      const tolerance=Math.max(.08,d*.04);let neighbors=0;
+      if(x&&this.depths[i-1]&&Math.abs(this.depths[i-1]-d)<=tolerance)neighbors++;
+      if(x+1<columns&&this.depths[i+1]&&Math.abs(this.depths[i+1]-d)<=tolerance)neighbors++;
+      if(y&&this.depths[i-columns]&&Math.abs(this.depths[i-columns]-d)<=tolerance)neighbors++;
+      if(y+1<rows&&this.depths[i+columns]&&Math.abs(this.depths[i+columns]-d)<=tolerance)neighbors++;
+      if(neighbors<2||!this.projector.point((x+.5)/columns,(y+.5)/rows,d,this.point))continue;
+      const j=count++*3;this.points[j]=this.point[0];this.points[j+1]=this.point[1];this.points[j+2]=this.point[2];
     }
-    for (let y = 0; y < rows; y++) for (let x = 0; x < columns; x++) {
-      const i = y * columns + x, d = this.depths[i]; if (!d) continue;
-      const tolerance = Math.max(.08, d * .04);
-      let neighbors = 0;
-      if (x && this.depths[i - 1] && Math.abs(this.depths[i - 1] - d) <= tolerance) neighbors++;
-      if (x + 1 < columns && this.depths[i + 1] && Math.abs(this.depths[i + 1] - d) <= tolerance) neighbors++;
-      if (y && this.depths[i - columns] && Math.abs(this.depths[i - columns] - d) <= tolerance) neighbors++;
-      if (y + 1 < rows && this.depths[i + columns] && Math.abs(this.depths[i + columns] - d) <= tolerance) neighbors++;
-      if (neighbors < 2 || !this.projector.point((x + .5) / columns, (y + .5) / rows, d, this.point)) continue;
-      const offset = count++ * 3;
-      this.points[offset] = this.point[0]; this.points[offset + 1] = this.point[1]; this.points[offset + 2] = this.point[2];
-      this.map.observe(this.point[0], this.point[1], this.point[2]);
+    this.pointReconstructionMs=Math.max(0,this.now()-pointStarted);const updateStarted=this.now();
+    this.map.begin(time,this.position,this.volume.height,this.projector.pose);
+    if(this.probe.lastUpdate===time)for(let i=0;i<this.probe.sampleCount;i++)if(this.probe.coherent[i])this.map.observe(this.probe.samples[i*3],this.probe.samples[i*3+1],this.probe.samples[i*3+2]);
+    for(let i=0;i<count*3;i+=3)this.map.observe(this.points[i],this.points[i+1],this.points[i+2]);
+    this.mapUpdateMs=Math.max(0,this.now()-updateStarted);const geometryStarted=this.now();this.map.finishGeometry();this.contactGeometryMs=Math.max(0,this.now()-geometryStarted);
+    const freeStarted=this.now(),pose=this.projector.pose;this.freeRayCount=0;this.rayStamp++;
+    // Keep every reconstructed occupied endpoint. Bound only redundant free-space rays,
+    // with nearby geometry first and a rotating distributed remainder over the same samples.
+    for(let i=0;i<count&&this.freeRayCount<32;i++){
+      const j=i*3,dx=this.points[j]-this.position[0],dz=this.points[j+2]-this.position[2];
+      if(dx*dx+dz*dz>1)continue;
+      this.map.traceFree(pose[12],pose[13],pose[14],this.points[j],this.points[j+1],this.points[j+2]);this.rayTags[i]=this.rayStamp;this.freeRayCount++;
     }
-    const pose = this.projector.pose;
-    // Endpoints first, then conservative ray carving; current surfaces are never cleared.
-    for (let i = 0; i < count * 3; i += 3) this.map.traceFree(pose[12], pose[13], pose[14], this.points[i], this.points[i + 1], this.points[i + 2]);
-    const currentProbe = this.probe.lastUpdate === time && this.probe.used > 0;
-    this.used = count; this.depthState = count || currentProbe ? 'available' : 'waiting';
-    if (count || currentProbe) {
-      if (Number.isFinite(this.lastData) && time > this.lastData) this.hz = 1000 / (time - this.lastData);
-      this.lastData = time; this.updates++;
+    const stride=Math.max(1,Math.floor(count/96));
+    for(let k=0;k<count&&this.freeRayCount<96;k++){
+      const i=(this.rayCursor+k*stride)%count;if(this.rayTags[i]===this.rayStamp)continue;const j=i*3;
+      this.map.traceFree(pose[12],pose[13],pose[14],this.points[j],this.points[j+1],this.points[j+2]);this.rayTags[i]=this.rayStamp;this.freeRayCount++;
     }
-    this.coverage = this.map.coverage(this.position[0], this.position[2], this.volume, time);
-    this.reconstructionMs = Math.max(0, this.now() - mapStarted);
+    if(count)this.rayCursor=(this.rayCursor+1)%count;
+    this.freeRayMs=Math.max(0,this.now()-freeStarted);
+    const currentProbe=this.probe.lastUpdate===time&&this.probe.used>0;
+    this.used=count;this.depthState=count||currentProbe?'available':'waiting';
+    if(count||currentProbe){if(Number.isFinite(this.lastData)&&time>this.lastData)this.hz=1000/(time-this.lastData);this.lastData=time;this.updates++;}
+    this.coverage=this.map.coverage(this.position[0],this.position[2],this.volume,time);
+    this.reconstructionMs=Math.max(0,this.now()-mapStarted);
     this.revalidator.update(time,reader,this.projector,view.projectionMatrix,this.map,this.position,this.volume,this.intentX,this.intentZ);
-    const spatialCost=this.reconstructionMs+(this.revalidator.costMs||0);
-    if (spatialCost > 4) {
-      this.interval = Math.min(500, this.interval * 1.5); this.columns = 16; this.rows = 12; this.fastUpdates = 0;
-    } else if (spatialCost < 2) {
-      this.fastUpdates++;
-      if (this.fastUpdates >= 8 && this.interval > 125) { this.interval = Math.max(125, this.interval * .8); this.fastUpdates = 0; }
-      else if (this.fastUpdates >= 16 && this.interval === 125) { this.columns = 24; this.rows = 18; this.fastUpdates = 0; }
-    } else this.fastUpdates = 0;
+    this.map.finishGeometry();this.adaptSpatial(this.reconstructionMs+(this.revalidator.costMs||0));
+  }
+  adaptSpatial(cost) {
+    if(cost>4){this.interval=Math.min(500,this.interval*1.5);this.columns=16;this.rows=12;this.fastUpdates=0;this.adaptiveReason='custo espacial >4 ms';this.lastReduction=this.time;}
+    else if(cost<3.2){
+      this.fastUpdates++;const needed=cost<2?8:16;
+      this.adaptiveReason=cost<2?'recuperação: custo <2 ms':'recuperação com 20% de folga no orçamento de 4 ms';
+      if(this.fastUpdates>=needed&&this.interval>125){this.interval=Math.max(125,this.interval*.8);this.fastUpdates=0;}
+      else if(this.fastUpdates>=16&&this.interval===125){this.columns=24;this.rows=18;this.fastUpdates=0;}
+    }else{this.fastUpdates=0;this.adaptiveReason='custo entre 3,2 e 4 ms; aguardando folga';}
   }
   move(position, dx, dz, time) {
-    const moveStarted=this.now();
-    if(this.enabled&&this.guided){this.result.x=position[0];this.result.z=position[2];return this.result;}
+    const moveStarted=this.now();this.map.currentBlockCount=0;this.map.currentBlockCells.fill(null);this.contact=null;
+    if(this.enabled&&(this.guided||this.suspended)){this.result.x=position[0];this.result.z=position[2];return this.result;}
     if (this.enabled && Math.hypot(dx, dz) > 1e-8) {
       this.intentX = dx; this.intentZ = dz; this.intentTime = time;
     }
@@ -304,6 +332,7 @@ export class ARCollisions {
       if (this.blocked) {
         this.blockSource = solved.sourceBits === 3 ? 'ambos' : solved.sourceBits === 2 ? 'sonda imediata' : solved.sourceBits === 1 ? 'mapa persistente' : 'limite de deslocamento';
         this.blockEvidence=solved.evidenceBits===3?'evidência atual e memória espacial':solved.evidenceBits===2?'memória espacial':solved.evidenceBits===1?'evidência atual':null;
+        this.contact=this.map.commitBlock(solved.x,solved.z,this.volume,time,this.resolver.skin)||this.probe.contactAt(solved.x,solved.z,this.volume,time,this.resolver.skin);
         this.blockConfirmation = solved.confirmationTime;
         this.lastBlockedTime = time; this.lastBlockedDirection = this.direction;
       }
@@ -314,10 +343,11 @@ export class ARCollisions {
     if (this.enabled && Math.hypot(dx,dz)>1e-8) {
       if(time-this.lastSlotTime>=250){this.eventCursor=(this.eventCursor+1)%32;this.eventCount=Math.min(32,this.eventCount+1);this.lastSlotTime=time;}
       const event=this.events[(this.eventCursor+31)%32];
-      event.rawX=this.rawX;event.rawZ=this.rawZ;event.transformedX=this.controlX;event.transformedZ=this.controlZ;
+      event.mapGeneration=this.mapGeneration;event.rawX=this.rawX;event.rawZ=this.rawZ;event.transformedX=this.controlX;event.transformedZ=this.controlZ;
       event.probeDirectionX=this.probe.directionX;event.probeDirectionZ=this.probe.directionZ;event.probeTime=Number.isFinite(this.probe.acquiredTime)?this.probe.acquiredTime:null;
       event.previousX=position[0];event.previousY=position[1];event.previousZ=position[2];event.wantedY=event.finalY=position[1];event.wantedX=position[0]+dx;event.wantedZ=position[2]+dz;event.finalX=this.result.x;event.finalZ=this.result.z;
       event.penetrationBefore=this.penetrationBefore;event.penetrationTarget=this.penetrationTarget;event.contactBefore=this.blocked?this.resolver.result.before:null;event.contactTarget=this.blocked?this.resolver.result.after:null;event.rejection=this.blocked?this.resolver.result.reason:null;
+      event.surfaceDistance=this.contact?.surfaceDistance??null;event.contactClearance=this.contact?.clearance??null;event.contactMargin=this.map.config.pointMargin;event.contactSkin=this.resolver.skin;event.contactCellId=this.contact?.cellId??null;
       event.contactDistance=this.blocked?this.resolver.result.distance:null;event.evidenceAge=this.blocked&&Number.isFinite(this.blockConfirmation)?Math.max(0,time-this.blockConfirmation):null;
       event.supportPlaneYAtCharacter=this.supportAt(this.result.x,this.result.z);event.supportY=this.volume.ground;event.supportNormalX=this.normal[0];event.supportNormalY=this.normal[1];event.supportNormalZ=this.normal[2];event.renderedBase=this.renderedBase;event.supportDifference=this.renderedBase==null?null:this.renderedBase-this.volume.ground;event.shadowY=this.shadowY;event.visualJump=this.jumpY;
       event.time=time;event.dx=dx;event.dz=dz;event.actualX=this.result.x-position[0];event.actualZ=this.result.z-position[2];
@@ -344,7 +374,7 @@ export class ARCollisions {
   }
   snapshot() {
     const planeY=this.supportAt(this.position[0],this.position[2]);
-    return {guided:this.guided, guidedNewCells:this.guided?this.map.createdCount-this.guidedBaseline:0, memory:this.map.stats(this.time), revalidationMs:this.revalidator.costMs, revalidationChecks:this.revalidator.checks, revalidationQueries:this.revalidator.queries, memoryEvidence:this.blocked?this.blockEvidence:null, enabled: this.enabled, phase: this.phase(), used: this.used, sampled: this.sampled,
+    return {mapGeneration:this.mapGeneration??0,contact:this.contact?{...this.contact}:null,blockedCells:this.map.blockedDetails(this.time),acquisitionMs:this.acquisitionMs,nativeReadMs:this.nativeReadMs,readerMs:this.readerMs,projectionMs:this.projectionMs,gridReadMs:this.gridReadMs,pointReconstructionMs:this.pointReconstructionMs,mapUpdateMs:this.mapUpdateMs,contactGeometryMs:this.contactGeometryMs,freeRayMs:this.freeRayMs,freeRayCount:this.freeRayCount,adaptiveReason:this.adaptiveReason,lastReduction:this.lastReduction,session:this.sessionId,suspended:!!this.suspended,lastMapClearReason:this.lastMapClearReason??null,guided:this.guided, guidedNewCells:this.guided?this.map.createdCount-this.guidedBaseline:0, memory:this.map.stats(this.time), revalidationMs:this.revalidator.costMs, revalidationChecks:this.revalidator.checks, revalidationQueries:this.revalidator.queries, memoryEvidence:this.blocked?this.blockEvidence:null, enabled: this.enabled, phase: this.phase(), used: this.used, sampled: this.sampled,
       occupied: this.map.occupiedCount, cells: this.map.cells.size, freeCells: this.map.free.size,
       hz: this.hz, reconstructionMs: this.reconstructionMs, queryMs: this.queryMs,
       coverage: this.coverage, direction: this.direction, blocked: this.blocked,
@@ -372,6 +402,7 @@ export class ARCollisions {
     if(this.elements.debugToggle)this.elements.debugToggle.disabled=!this.enabled;
     if(readout&&this.enabled&&diagnosticOpen)readout.textContent+='\nApoio Y: '+this.volume.ground.toFixed(3)+' m; base renderizada: '+(this.renderedBase==null?'indisponível':this.renderedBase.toFixed(3)+' m')+'\nÚltimo bloqueio preservado: '+(this.lastBlockAvailable?Math.max(0,time-this.lastBlock.time).toFixed(0)+' ms; '+this.lastBlock.source:'indisponível');
     if(readout&&this.enabled&&diagnosticOpen)readout.textContent+='\nPlano no personagem: '+(this.supportAt(this.position[0],this.position[2])?.toFixed(3)??'indisponível')+' m';
+    if(readout&&this.enabled&&diagnosticOpen){readout.textContent+='\nÚltima limpeza: '+(this.lastMapClearReason||'indisponível')+'\nAdaptação: '+(this.adaptiveReason||'aguardando')+'\nAquisição / grade / pontos / mapa / raios / revalidação (ms): '+[this.acquisitionMs,this.gridReadMs,this.pointReconstructionMs,this.mapUpdateMs,this.freeRayMs,this.revalidator.costMs].map(v=>v==null?'—':v.toFixed(2)).join(' / ')+'\nRaios livres: '+this.freeRayCount+' (máximo 96)';if(this.contact)readout.textContent+='\nContato estimado: centro→superfície '+this.contact.surfaceDistance.toFixed(3)+' m; folga do volume '+this.contact.clearance.toFixed(3)+' m; margem/pele '+this.map.config.pointMargin+'/'+this.resolver.skin+' m; célula '+this.contact.cellId+'; '+this.contact.state+'; evidências livres '+this.contact.freeEvidence;}
     if(readout&&this.enabled&&diagnosticOpen){const m=this.map.stats(time);readout.textContent+='\nMemória: '+m.candidates+' candidatas; '+m.confirmed+' confirmadas totais; '+m.consolidated+' consolidadas; '+m.awaiting+' aguardando revalidação\nIdade máxima: '+(m.oldestAgeMs===null?'indisponível':(m.oldestAgeMs/1000).toFixed(1)+' s')+'\nRevalidadas / liberadas / expiradas: '+[m.revalidated,m.released,m.expired].join(' / ')+'\nOclusas preservadas: '+m.occluded+'; observações oclusas: '+m.occlusionObservations+'\nSaturação / descartes / recusas: '+[m.saturated,m.evicted,m.rejected].join(' / ')+'\nRevalidação: '+(this.revalidator.costMs===null?'indisponível':this.revalidator.costMs.toFixed(2)+' ms')+'; consultas '+this.revalidator.queries+'\nManutenção: '+(m.maintenanceMs===null?'indisponível':m.maintenanceMs.toFixed(2)+' ms')+'\nMapeamento guiado: '+(this.guided?'ativo':'desativado')+'\nBloqueio temporal: '+(this.blocked?this.blockEvidence:'sem bloqueio atual');}
     this.diagnosticMs=Math.max(0,this.now()-diagnosticStarted);
     if (!canvas) return;
@@ -390,8 +421,8 @@ export class ARCollisions {
     }
     c.strokeStyle = '#b7f36e'; c.lineWidth = 1; c.beginPath(); c.arc(64, 64, this.volume.radius * scale, 0, 2 * Math.PI); c.stroke();this.diagnosticMs=Math.max(0,this.now()-diagnosticStarted);
   }
-  stop() {
-    this.clearProbe();
+  stop(reason='session-end') {
+    this.clearProbe(reason);this.suspended=false;
     this.sessionActive = false; this.available = false; this.enabled = false; this.visual = false;
     this.anchored = false; this.supportValid = false; this.tracking = true;
     this.map.clear(); this.projector.clear(); this.depths.fill(0); this.points.fill(0);
@@ -411,14 +442,22 @@ export class ARCollisions {
     if (this.elements.readout) this.elements.readout.textContent = '';
     if (this.elements.canvas) this.elements.canvas.hidden = true;
   }
-  clearProbe() {
+  clearEvents() {
+    this.map.lastBlockCells.fill(null);this.map.blockCellCount=0;this.map.lastMapBlockTime=-Infinity;
+    this.lastBlock ||= {};for(const key of Object.keys(this.lastBlock))delete this.lastBlock[key];this.lastBlockAvailable=false;
+    this.events ||= Array.from({length:32},()=>({}));for(const event of this.events)for(const key of Object.keys(event))delete event[key];this.eventCount=this.eventCursor=0;this.lastEvent=this.lastSlotTime=-Infinity;
+  }
+  clearProbe(reason='map-clear') {
+    if(this.sessionActive){this.time=Math.max(this.time||0,this.now());const events=[];for(let i=0;i<this.eventCount;i++)events.push(this.events[(this.eventCursor-this.eventCount+i+32)%32]);this.archive.capture(this.sessionId,this.sessionOrigin,reason,events,this.lastBlockAvailable?this.lastBlock:null,this.snapshot());}
+    if(this.elements.copyButton)this.elements.copyButton.textContent='Copiar diagnóstico textual';if(this.elements.feedback)this.elements.feedback.textContent='';
+    this.lastMapClearReason=reason;this.mapGeneration=(this.mapGeneration||0)+1;
+    this.acquisitionMs=this.nativeReadMs=this.readerMs=this.projectionMs=this.gridReadMs=this.pointReconstructionMs=this.mapUpdateMs=this.contactGeometryMs=this.freeRayMs=null;this.freeRayCount=0;this.adaptiveReason=null;this.lastReduction=null;this.rayTags.fill(0);this.rayStamp=this.rayCursor=0;
     this.revalidator.clear();this.guided=false;this.guidedBaseline=0;
     if(this.elements.mappingButton){this.elements.mappingButton.disabled=true;this.elements.mappingButton.textContent='Mapear ambiente';this.elements.mappingButton.setAttribute('aria-pressed','false');}
     if(this.elements.mappingReadout){this.elements.mappingReadout.hidden=true;this.elements.mappingReadout.textContent='';}
-    this.lastBlock ||= {};for(const key of Object.keys(this.lastBlock))delete this.lastBlock[key];this.lastBlockAvailable=false;
+    this.clearEvents();
     this.rawX=this.rawZ=this.controlX=this.controlZ=null;this.renderedBase=this.shadowY=this.jumpY=null;
     this.debug3D=false;if(this.elements.debugToggle)this.elements.debugToggle.checked=false;
-    this.events ||= Array.from({length:32},()=>({})); for(const event of this.events) for(const key of Object.keys(event)) delete event[key]; this.eventCount=this.eventCursor=0;this.lastEvent=this.lastSlotTime=-Infinity;
     this.probe.clear(); this.intentX = this.intentZ = 0; this.intentTime = -Infinity;
     this.probeInterval = 66; this.blockEvidence=null;this.blockSource = ''; this.blockConfirmation = -Infinity;
     this.lastBlockedTime = -Infinity; this.lastBlockedDirection = '';

@@ -8,13 +8,13 @@ system.start('waiting'); system.place([0, 0, -1]); system.setCharacter('bip', 1,
 const info = {width: 160, height: 90, rawValueToMeters: .001, data: new Uint16Array(160 * 90).fill(2000).buffer, normDepthBufferFromNormView: {matrix: I()}};
 const view = {projectionMatrix: perspective(Math.PI / 2, 1), transform: {matrix: tr(0, .35, 0)}};
 let time = 0, cold;
-const updates = [], probes = [];
+const updates = [], probes = [], stages={grid:[],points:[],mapAndConsolidation:[],contactGeometry:[],freeRays:[],revalidation:[],maintenance:[]};
 for (let i = 0; i < 240; i++) {
   time += system.interval + 1; system.frame(time, true);
   system.move([0, 0, -1], 0, -.001, time);
   system.accept(time, createDepthReader(info, 'luminance-alpha'), info, view);
   if (!i) cold = system.reconstructionMs;
-  if (i >= 40) { updates.push(system.reconstructionMs); probes.push(system.probe.costMs); }
+  if (i >= 40) { updates.push(system.reconstructionMs); probes.push(system.probe.costMs);for(const [name,value] of Object.entries({grid:system.gridReadMs,points:system.pointReconstructionMs,mapAndConsolidation:system.mapUpdateMs,contactGeometry:system.contactGeometryMs,freeRays:system.freeRayMs,revalidation:system.revalidator.costMs,maintenance:system.map.maintenanceMs}))if(value!==null)stages[name].push(value); }
 }
 function summary(values) {
   const sorted = [...values].sort((a, b) => a - b);
@@ -47,6 +47,7 @@ console.log(JSON.stringify({
   environment: {node: process.version, platform: process.platform, arch: process.arch, geometry: 'SYNTHETIC 160x90 plane, 2 axial meters; no physical camera'},
   reconstruction: {coldMs: cold, ...summary(updates), points: system.used, cells: system.map.cells.size, occupied: system.map.occupiedCount, free: system.map.free.size, intervalMs: system.interval},
   immediateProbe: {...summary(probes), tested: system.probe.tested, used: system.probe.used, retainedSegments: system.probe.count, intervalMs: system.probeInterval},
+  stages:Object.fromEntries(Object.entries(stages).map(([name,values])=>[name,summary(values)])),freeRayBudget:96,freeRayCount:system.freeRayCount,
   queries, initialOverlap: overlaps, stressFiveMeterMove: summary(fast),
 }, null, 2));
 system.stop();

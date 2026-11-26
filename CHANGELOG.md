@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.5 — 2026-11-25
+
+- Refinamento de contato por limites normais recentes de superfícies locais contínuas/coerentes e acabamento numérico de subpassos, sem reduzir perfis, raio ou margens.
+- Revalidação da pegada medida por cinco raios, priorização de contatos bloqueantes e sequências independentes de evidência livre; retenção consolidada de 45 s preservada.
+- Orçamento de raios livres redundantes de 96 por atualização; endpoints ocupados preservados. Estágios temporizados e recuperação adaptativa com margem de processamento.
+- Diagnóstico de contato, células bloqueantes e destaque 3D; arquivo textual anônimo/limitado em memória JS, recuperável fora de AR, com cópia explícita, exportação JSON e limpeza.
+- Suspensão por visibilidade na mesma referência; limpeza obrigatória em invalidação/reset/fim e isolamento entre sessões.
+- Cache ar-play-v1.1.5 com diagnostics.js; testes geométricos/temporais/lifecycle e navegador ampliados. Sem novas dependências, mudanças nos modelos ou homologação física antecipada.
+
 ## 1.1.4 — 2026-11-25
 
 - Memória de ocupação adaptativa por sessão: candidatas, confirmadas, consolidadas e aguardando revalidação; retenção consolidada de 45 s e expiração para desconhecido.

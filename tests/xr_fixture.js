@@ -16,7 +16,7 @@
   const cameraInverse = new Float32Array(I); cameraInverse[13] = -.35;
   class FakeFrame {
     constructor(session) { this.session = session; }
-    getViewerPose() { const angle=test.cameraYaw??0,c=Math.cos(angle),s=Math.sin(angle);camera[0]=camera[10]=c;camera[2]=-s;camera[8]=s;cameraInverse[0]=cameraInverse[10]=c;cameraInverse[2]=s;cameraInverse[8]=-s;camera[12]=test.cameraX??0;cameraInverse[12]=-c*camera[12];cameraInverse[14]=-s*camera[12];return {transform: {matrix: camera}, views: [{projectionMatrix: P, transform: {matrix: camera, inverse: {matrix: cameraInverse}}}]}; }
+    getViewerPose() { if(test.poseMissing)return null;const angle=test.cameraYaw??0,c=Math.cos(angle),s=Math.sin(angle);camera[0]=camera[10]=c;camera[2]=-s;camera[8]=s;cameraInverse[0]=cameraInverse[10]=c;cameraInverse[2]=s;cameraInverse[8]=-s;camera[12]=test.cameraX??0;cameraInverse[12]=-c*camera[12];cameraInverse[14]=-s*camera[12];return {transform: {matrix: camera}, views: [{projectionMatrix: P, transform: {matrix: camera, inverse: {matrix: cameraInverse}}}]}; }
     getHitTestResults() {
       if (!test.spatial) return [];
       test.hitReady = true;
@@ -53,6 +53,7 @@
       const granted = test.scenario !== 'denied' && test.scenario !== 'unsupported' && !!options.depthSensing;
       const handlers = {};
       const session = {
+        visibilityState:'visible',
         enabledFeatures: granted ? ['hit-test', 'dom-overlay', 'depth-sensing'] : ['hit-test', 'dom-overlay'],
         get depthUsage() { if (!granted) throw new DOMException('Not granted', 'InvalidStateError'); return 'cpu-optimized'; },
         get depthDataFormat() { if (!granted) throw new DOMException('Not granted', 'InvalidStateError'); return 'luminance-alpha'; },
@@ -72,6 +73,7 @@
         },
         async end() { this.ended = true; handlers.end?.(); },
       };
+      test.visibility=state=>{session.visibilityState=state;handlers.visibilitychange?.({session});};
       test.place = () => handlers.select?.();
       return session;
     },

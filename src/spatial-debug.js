@@ -13,6 +13,7 @@ export class SpatialDebug {
       {color:[.9,.1,1,1],overlay:true}, {color:[.1,1,1,1],overlay:true},
       {color:[.55,.55,.55,1],points:true},
       {color:[.7,.2,1,1]}, {color:[1,.3,.7,1]}, {color:[.5,1,.75,1],points:true},
+      {color:[1,1,1,1]}, {color:[1,1,1,1],points:true},
     ];
     this.clear();
   }
@@ -62,7 +63,7 @@ export class SpatialDebug {
       if(inspected++>=256)break;
       if(m.memoryState(cell,time)!=='confirmed' || cell.minY>=v.ground+v.height || cell.maxY<=v.ground+c.floorTolerance)continue;
       if(this.cellCount++>=64){this.cellCount=64;break;}
-      this.box(cell.minX-c.pointMargin,cell.minY,cell.minZ-c.pointMargin,cell.maxX+c.pointMargin,cell.maxY,cell.maxZ+c.pointMargin);
+      this.box((cell.refineAxis===0?cell.contactMin:cell.minX)-c.pointMargin,cell.minY,(cell.refineAxis===2?cell.contactMin:cell.minZ)-c.pointMargin,(cell.refineAxis===0?cell.contactMax:cell.maxX)+c.pointMargin,cell.maxY,(cell.refineAxis===2?cell.contactMax:cell.maxZ)+c.pointMargin);
     }
     this.end();this.begin(3);
     const h=s.probe.history;
@@ -113,7 +114,7 @@ export class SpatialDebug {
       for(const cell of m.cells.values()){
         if(inspected++>=256||this.cellCount>=64)break;
         if(m.memoryState(cell,time)!==state||cell.minY>=v.ground+v.height||cell.maxY<=v.ground+c.floorTolerance)continue;
-        this.cellCount++;this.box(cell.minX-c.pointMargin,cell.minY,cell.minZ-c.pointMargin,cell.maxX+c.pointMargin,cell.maxY,cell.maxZ+c.pointMargin);
+        this.cellCount++;this.box((cell.refineAxis===0?cell.contactMin:cell.minX)-c.pointMargin,cell.minY,(cell.refineAxis===2?cell.contactMin:cell.minZ)-c.pointMargin,(cell.refineAxis===0?cell.contactMax:cell.maxX)+c.pointMargin,cell.maxY,(cell.refineAxis===2?cell.contactMax:cell.maxZ)+c.pointMargin);
       }
       this.end();
     }
@@ -122,6 +123,14 @@ export class SpatialDebug {
       const j=i*5,x=m.released[j],y=m.released[j+1],z=m.released[j+2];
       if(time-m.released[j+3]<1500&&m.stateAt(x,y,z,time)==='free')this.vertex(x,y,z);
     }
+    this.end();this.begin(12);
+    if(time-m.lastMapBlockTime<10000)for(let i=0;i<m.blockCellCount;i++){
+      const cell=m.lastBlockCells[i];if(m.cells.get(cell.key)!==cell||!m.valid(cell,time))continue;
+      this.box((cell.refineAxis===0?cell.contactMin:cell.minX)-c.pointMargin,cell.minY,(cell.refineAxis===2?cell.contactMin:cell.minZ)-c.pointMargin,(cell.refineAxis===0?cell.contactMax:cell.maxX)+c.pointMargin,cell.maxY,(cell.refineAxis===2?cell.contactMax:cell.maxZ)+c.pointMargin);
+    }
+    this.end();this.begin(13);
+    if(m.lastContactCell&&m.cells.get(m.lastContactCell.key)===m.lastContactCell&&time-m.lastMapBlockTime<10000)this.vertex(m.contactPoint[0],m.contactPoint[1],m.contactPoint[2]);
+    else if(time-s.probe.lastBlockTime<900)this.vertex(s.probe.contactPoint[0],s.probe.contactPoint[1],s.probe.contactPoint[2]);
     this.end();this.buildMs=Math.max(0,this.now()-started);
   }
   draw(){if(!this.enabled)return;const started=this.now();this.engine.drawDebug(this.data,this.groups);this.drawMs=Math.max(0,this.now()-started);}

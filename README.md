@@ -1,4 +1,4 @@
-# AR Play — v1.1.4 (MVP)
+# AR Play — v1.1.5 (MVP)
 
 Aplicativo web de personagens 3D interativos, inspirado na experiência de câmera com efeitos de realidade aumentada. Não é uma reprodução do TikTok. Os três personagens (Bip, Nori e Luma) são construídos proceduralmente, sem baixar modelos ou usar ativos proprietários.
 
@@ -40,13 +40,29 @@ A câmera, renderização e gravação são processadas localmente. O app não e
 
 ## Testes
 
-`npm test`: 105 testes, incluindo reconstrução 3D, projeções assimétricas, chão, confirmação/expiração, cobertura desconhecida, paredes/móveis, posições efetivas, recuo, deslizamento, escala e limpeza. A correção 1.1.1 acrescenta bloqueio imediato com mapa parcial, persistência lateral, liberação confiável, limites geométricos do contato e saída de sobreposição. A expiração de ocupação descarta votos livres fracos anteriores e retorna a desconhecido. O cache atual é `ar-play-v1.1.4`. `npm run check` valida a sintaxe JavaScript. Geometria e sessões automatizadas são sintéticas; a suíte de navegador também verifica a integração XR simulada, a sonda com diagnóstico fechado e a preservação dos modos existentes.
+`npm test`: 127 testes, incluindo reconstrução 3D, projeções assimétricas, chão, confirmação/expiração, cobertura desconhecida, paredes/móveis, posições efetivas, recuo, deslizamento, escala e limpeza. A correção 1.1.1 acrescenta bloqueio imediato com mapa parcial, persistência lateral, liberação confiável, limites geométricos do contato e saída de sobreposição. A expiração de ocupação descarta votos livres fracos anteriores e retorna a desconhecido. O cache atual é `ar-play-v1.1.5`. `npm run check` valida a sintaxe JavaScript. Geometria e sessões automatizadas são sintéticas; a suíte de navegador também verifica a integração XR simulada, a sonda com diagnóstico fechado e a preservação dos modos existentes.
 
 Benchmark CPU opcional: `node tests/spatial_benchmark.mjs`. Usa geometria sintética, informa ambiente, mediana, p95 e máximos; não mede sensor, câmera ou desempenho no celular.
 
 Suíte de navegador: instale Python 3.12+, Playwright (`python -m pip install playwright==1.63.0`) e Chromium (`python -m playwright install chromium`). Execute `python tests/browser_test.py`. Ajuste a variável `CHROMIUM` com o caminho de um Chrome/Chromium instalado, se necessário. O teste usa câmera simulada e hospeda somente os arquivos públicos em um diretório temporário sob `/ar-play/`, com porta livre. `PREVIEW` permite salvar capturas; `BASE_URL` permite verificar a URL HTTPS publicada em vez do servidor temporário. Essas ferramentas são exclusivas de teste; o aplicativo continua sem dependências de execução. O WebXR real não é coberto por essa suíte.
 
 Câmera física, sensores, instalação no Android e ARCore exigem validação no aparelho. Os testes de navegador usam câmera simulada e não homologam WebXR/ARCore.
+
+## Contato e recuperação do diagnóstico — 1.1.5
+
+Margem do mapa (2,5 cm), pele (1,5 cm), perfis dos 12 cilindros e escala visual foram preservados. O acabamento numérico do contato remove a folga extra de um subpasso; em paredes sintéticas ideais, volume e superfície ficam separados pelas margens de 4 cm. Superfícies locais alinhadas aos eixos, contínuas e estáveis podem usar limites normais recentes de três atualizações coerentes, evitando que um extremo antigo aumente indefinidamente a espessura física. Demais casos mantêm a geometria conservadora existente. A grade de 12 cm continua sendo índice espacial.
+
+O envelope inclui animações e orientações, portanto pode parar antes do corpo em repouso. Fixtures de parede vertical mostraram folgas visuais analíticas de aproximadamente 7,8 a 20,3 cm conforme personagem/escala, mesmo com 4 cm entre volume e parede. Isso é uma limitação geométrica demonstrada, não medição/calibração do aparelho. Não há garantia física de 2–5 cm nem mudança arbitrária dos modelos/volumes.
+
+Revalidação prioriza células que bloquearam e voltaram à vista. Além do critério legado de 18 cm, cinco raios podem comprovar travessia completa do envelope medido com as margens existentes e incerteza numérica de profundidade. Mudanças menores podem liberar antes dos 45 s quando toda a pegada é observável e livre; uma parte ainda presente, oclusão ou dados insuficientes preservam ocupação. Sequências de raios legados e consultas dirigidas são independentes e nunca somadas para fabricar confirmações. Branco na geometria 3D destaca até oito células responsáveis pelo último bloqueio e um contato calculado, respeitando validade e limites visuais.
+
+O mapa mantém todos os endpoints ocupados (até 432). Raios livres redundantes ficam limitados a 96 por atualização, com até 32 próximos priorizados e restante distribuído/rotativo. Cobertura livre pode levar mais atualizações; desconhecido não se torna prova de espaço livre. O diagnóstico separa aquisição, grade, reconstrução, atualização/consolidação, refinamento de contato, raios, revalidação e manutenção. Recuperação adaptativa aceita custo abaixo de 3,2 ms com 16 atualizações; preserva recuperação rápida abaixo de 2 ms e redução acima de 4 ms. Valores são custos medidos no ambiente, não garantia Android.
+
+Depois de encerrar AR, **Último diagnóstico AR** permite recuperar o último registro textual nesta mesma página. Contém versão, sessão, geração do mapa, eventos relativos, último bloqueio e motivo de limpeza/fim. É limitado a um registro de até 32 kB, até 32 eventos e oito motivos; não contém coordenadas absolutas, poses completas, imagens, mapas ou profundidade bruta. **Copiar** informa sucesso/falha; **Exportar diagnóstico** salva JSON localmente, inclusive se a área de transferência falhar. **Limpar histórico** remove o texto. O painel ativo também oferece exportação/limpeza; limpar texto não apaga o mapa ativo. Não há transmissão nem armazenamento automático persistente. Recarregar/fechar a página perde esse registro: exporte antes, se necessário.
+
+Visibilidade temporariamente oculta/desfocada suspende processamento e entrada, mantendo memória na mesma sessão/referência. TTL continua decorrendo. Retorno exige referência sem reset e pose válida; pose inválida enquanto visível, reset e fim limpam a geometria. Outra sessão começa vazia e é identificada separadamente. Reposicionamento continua limpando devido à dependência do apoio/origem; não há reaproveitamento inseguro de coordenadas.
+
+Homologação física da 1.1.5 pendente: comparar contato em 40%, 54%, 66% e 100%, mapear/retirar/deslocar uma caixa segura, reobservar centro e bordas, testar objeto oculto, recuo/deslizamento e suspensão/retorno. Após falha, soltar joystick, sair de AR e copiar/exportar o registro antes de recarregar. Não interpretar sobreposição visual como penetração comprovada, pois não há oclusão real.
 
 ## Memória espacial experimental — 1.1.4
 

@@ -152,16 +152,20 @@ export class DepthDiagnostics {
       this.state.status = this.capability; this.state.detail = this.reason;
     }
     const started = this.now();
+    if(spatialDue)consumer.acquisitionMs=consumer.nativeReadMs=consumer.readerMs=null;
     let attempted = false;
     try {
       if (this.capability === 'waiting' && view) {
         attempted = true;
         if (typeof frame.getDepthInformation !== 'function') throw new Error('CPU reader absent');
-        const info = frame.getDepthInformation(view);
+        const nativeStarted=this.now();const info = frame.getDepthInformation(view);
+        if(consumer)consumer.nativeReadMs=Math.max(0,this.now()-nativeStarted);
         if (info) {
           // Exactly one native acquisition and one typed reader for both consumers.
-          const reader = createDepthReader(info, this.state.format);
+          const readerStarted=this.now();const reader = createDepthReader(info, this.state.format);
+          if(consumer)consumer.readerMs=Math.max(0,this.now()-readerStarted);
           const acquisitionMs = Math.max(0, this.now() - started);
+          if(consumer)consumer.acquisitionMs=acquisitionMs;
           if (spatialDue) {
             try { consumer.accept(time, reader, info, view); }
             catch { consumer.missing(time, 'error'); }

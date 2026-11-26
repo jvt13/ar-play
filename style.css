@@ -8,3 +8,5 @@
 body.xr #hint{position:static;transform:none;align-self:center;max-width:90%;margin:0}body.xr #arDiagnostics{position:relative;top:auto;left:auto;align-self:flex-start;flex-shrink:1;max-height:max(30px,calc(100dvh - 520px))}
 
 #mappingReadout[hidden]{display:none}#mappingToggle{font-size:11px;padding:6px 10px;border-radius:9px}
+
+#lastDiagnostic[hidden]{display:none}#lastDiagnostic{align-self:flex-start;font-size:11px;padding:6px 10px}#archiveText{max-height:45vh;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px}
