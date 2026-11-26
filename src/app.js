@@ -8,7 +8,7 @@ import {chain,tr,sc,ry,mul,perspective,lookAt,cover,clamp} from './math.js';
 const $=id=>document.getElementById(id),view=$('view'),canvas=$('gl'),video=$('camera'),ctx=view.getContext('2d',{alpha:false});
 const depth=new DepthDiagnostics({button:$('depthToggle'),panel:$('depthPanel'),readout:$('depthReadout'),mapToggle:$('depthMapToggle'),mapCanvas:$('depthMap')});
 const archive=new DiagnosticArchive();
-const collisions=new ARCollisions({archive,feedback:$('diagnosticFeedback'),exportButton:$('exportDiagnostic'),clearButton:$('clearDiagnostic'),onExport:text=>download(new Blob([text],{type:'application/json'}),'json'),toggle:$('collisionToggle'),status:$('collisionStatus'),readout:$('collisionReadout'),visualToggle:$('collisionVisualToggle'),canvas:$('collisionMap'),copyButton:$('copyDiagnostic'),debugToggle:$('spatialDebugToggle'),mappingButton:$('mappingToggle'),mappingReadout:$('mappingReadout')},{orientedVolume:true});
+const collisions=new ARCollisions({archive,feedback:$('diagnosticFeedback'),exportButton:$('exportDiagnostic'),clearButton:$('clearDiagnostic'),onExport:text=>download(new Blob([text],{type:'application/json'}),'json'),toggle:$('collisionToggle'),status:$('collisionStatus'),readout:$('collisionReadout'),visualToggle:$('collisionVisualToggle'),canvas:$('collisionMap'),copyButton:$('copyDiagnostic'),debugToggle:$('spatialDebugToggle'),mappingButton:$('mappingToggle'),mappingReadout:$('mappingReadout')});
 let engine;try{engine=new Engine(canvas)}catch(e){$('status').textContent='WebGL indisponível. Atualize o navegador.';throw e}
 const spatialDebug=new SpatialDebug(engine),spatialMotion=new Float64Array(2);
 collisions.debugStats=spatialDebug;

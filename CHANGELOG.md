@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.7 — 2026-11-26
+
+- ARP-004H: restaura como padrão os 12 cilindros circulares da 1.1.5; orientação/dança invariáveis adotam o comando sem rejeição espacial do giro. Mesmo resolvedor, proteções, margens e memória.
+- Volume orientado preservado somente como opção experimental explícita em desenvolvimento/testes, desativada na aplicação. Nenhum processamento simultâneo dos dois perfis.
+- Diagnóstico do controlador registra orientação pretendida/adotada, motivos e contagens de rejeição, deslocamento solicitado/permitido e sobreposição inicial, mantendo privacidade, limite e recuperação.
+- Mantém avanço parcial válido, limpeza de indicadores, altura de apoio imediata, lifecycle/gerações, exportação JSON, reconstrução otimizada e revalidação da pegada completa.
+- Sequências temporais em cinco escalas (incluindo Bip 81%), referência identificada da 1.1.5, memória/revalidação e benchmarks comparativos; suíte XR simulada ampliada.
+- Cache ar-play-v1.1.7 e inventários atualizados. Sem novas dependências de execução ou física vertical. Homologação física pendente; causa completa do travamento relatado não confirmada sem JSON específico.
+
 ## 1.1.6 — 2026-11-25
 
 - Envelope orientado de repouso/caminhada em 12 faixas, derivado dos modelos originais; separação por eixos, teto circular e fallback integral para dança. Giro/expansão consultam ocupações; modelos, margens e retenções preservados.

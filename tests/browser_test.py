@@ -44,7 +44,7 @@ try:
    assert mime in response.headers.get('Content-Type',''),(name,response.headers)
    assert response.read(),name
  print('PASS HTTP 200 and MIME types for all 19 public routes',base_url)
- for name in ['server.mjs','package.json','tests/browser_test.py','tests/app.test.js','tests/depth.test.js','tests/spatial.test.js','tests/collision.test.js','tests/hybrid.test.js','tests/refinement.test.js','tests/directional.test.js','tests/spatial-debug.test.js','tests/memory.test.js','tests/oriented.test.js','tests/generate_body_profiles.mjs','tests/volume_benchmark.mjs','tests/contact.test.js','tests/memory_benchmark.mjs','tests/spatial_benchmark.mjs','tests/xr_fixture.js','reports/report.md','reports/','README.md','CHANGELOG.md','TESTES.txt','iniciar.bat','.github/workflows/deploy-pages.yml','.git/config','.env']:
+ for name in ['server.mjs','package.json','tests/browser_test.py','tests/app.test.js','tests/depth.test.js','tests/spatial.test.js','tests/collision.test.js','tests/hybrid.test.js','tests/refinement.test.js','tests/directional.test.js','tests/spatial-debug.test.js','tests/memory.test.js','tests/oriented.test.js','tests/recovery.test.js','tests/collision-sequences.mjs','tests/recovery_compare.mjs','tests/recovery_benchmark.mjs','tests/revalidation-recovery.test.js','tests/revalidation-sequences.mjs','tests/fixtures/recovery-v115.json','tests/generate_body_profiles.mjs','tests/volume_benchmark.mjs','tests/contact.test.js','tests/memory_benchmark.mjs','tests/spatial_benchmark.mjs','tests/xr_fixture.js','reports/report.md','reports/','README.md','CHANGELOG.md','TESTES.txt','iniciar.bat','.github/workflows/deploy-pages.yml','.git/config','.env']:
   try:
    with urlopen(base_url+name,timeout=30) as response:raise AssertionError(f'Private file exposed: {name} ({response.status})')
   except HTTPError as error:assert error.code==404,(name,error.code)
@@ -154,7 +154,7 @@ try:
   ar.locator('#collisionToggle').check()
   ar.wait_for_function('window.__arplay.spatial().occupied > 0',timeout=15000)
   assert ar.locator('#depthPanel').is_hidden();assert ar.evaluate('window.__xrTest.reads')>0
-  assert ar.evaluate('window.__arplay.spatial().volumeMode')=='oriented-walk'
+  assert ar.evaluate('window.__arplay.spatial().volumeMode')=='legacy-circular'
   start=ar.evaluate('window.__arplay.state().pos')
   ar.locator('#joystick').focus();ar.keyboard.down('ArrowUp');ar.wait_for_timeout(2500)
   ar.wait_for_function('window.__arplay.spatial().blocked',timeout=15000)
@@ -163,6 +163,11 @@ try:
   jumped=ar.evaluate('window.__arplay.state().pos');assert abs(jumped[2]-stopped[2])<.04;assert jumped[1]==0
   ar.keyboard.up('ArrowUp');ar.locator('#joystick').focus();ar.keyboard.down('ArrowDown');ar.wait_for_timeout(700);ar.keyboard.up('ArrowDown')
   retreated=ar.evaluate('window.__arplay.state().pos');assert retreated[2]>stopped[2]+.05
+  ar.wait_for_timeout(100);old_yaw=ar.evaluate('window.__arplay.state().yaw')
+  ar.locator('#rotate').click();ar.wait_for_timeout(100)
+  assert abs(ar.evaluate('window.__arplay.state().yaw')-old_yaw-3.141592653589793/4)<1e-5
+  assert ar.evaluate('window.__arplay.spatial().posePending') is False
+  ar.locator('#joystick').focus()
   ar.keyboard.down('ArrowUp');ar.keyboard.down('ArrowRight');ar.wait_for_timeout(1800);ar.keyboard.up('ArrowUp');ar.keyboard.up('ArrowRight')
   slid=ar.evaluate('window.__arplay.state().pos');assert slid[0]>retreated[0]+.1;assert slid[2]>-1.8
   ar.locator('#depthToggle').click();ar.wait_for_function('document.querySelector("#collisionReadout").textContent.includes("Células")')
@@ -225,7 +230,7 @@ try:
   assert hybrid.evaluate('window.__arplay.spatial().occupied')==0
   assert hybrid.locator('#depthPanel').is_hidden()
   hybrid.wait_for_function('window.__arplay.spatial().blockSource === "sonda imediata"',timeout=10000)
-  probe_stop=hybrid.evaluate('window.__arplay.state().pos[2]');assert -2+.42*.511+.04-.01 < probe_stop < -1.4,probe_stop # oriented Bip forward extent, unchanged margins
+  probe_stop=hybrid.evaluate('window.__arplay.state().pos[2]');assert -2+.42*.771+.04-.01 < probe_stop < -1.4,probe_stop # legacy circular Bip envelope, unchanged margins
   assert hybrid.evaluate('window.__arplay.spatial().coverageInsufficient') is True
   hybrid.keyboard.up('ArrowUp');hybrid.locator('#joystick').focus();hybrid.keyboard.down('ArrowDown')
   hybrid.wait_for_timeout(200);hybrid.keyboard.up('ArrowDown')
@@ -235,6 +240,26 @@ try:
   hybrid.locator('#collisionToggle').uncheck();assert hybrid.evaluate('window.__arplay.spatial().probeSamples')==0
   hybrid.locator('#demo').click();assert not hybrid_errors,hybrid_errors;hybrid.close()
   print('PASS SIMULATED hybrid immediate probe: partial map, limited coverage, actual stop/retreat, closed diagnosis and cleanup')
+  regression=simulated.new_page();regression_errors=[];regression.on('pageerror',lambda error:regression_errors.append(str(error)))
+  regression.goto(base_url+'?test=1');regression.wait_for_function('window.__arplay?.state().frameCount > 3')
+  regression.evaluate('Object.assign(window.__xrTest,{spatial:true,highResolution:true})');regression.locator('#ar').click()
+  regression.wait_for_function('window.__xrTest.hitReady');regression.evaluate('window.__xrTest.place()')
+  regression.locator('#size').fill('81');regression.locator('#collisionToggle').check()
+  regression.wait_for_function('window.__arplay.spatial().scale === .81 && window.__arplay.spatial().occupied > 0')
+  import math
+  for heading in [0,math.pi/2,math.pi,-math.pi/2]:
+   regression.evaluate('(yaw)=>window.__xrTest.cameraYaw=yaw',heading);regression.wait_for_timeout(150)
+   start=regression.evaluate('window.__arplay.state().pos');regression.locator('#joystick').focus()
+   regression.keyboard.down('ArrowUp');regression.wait_for_timeout(350);regression.keyboard.up('ArrowUp')
+   finish=regression.evaluate('window.__arplay.state().pos')
+   advance=(finish[0]-start[0])*(-math.sin(heading))+(finish[2]-start[2])*(-math.cos(heading))
+   assert advance>.04,(heading,start,finish)
+   s=regression.evaluate('window.__arplay.spatial()');assert s['posePending'] is False
+   assert abs(s['requestedYaw']-s['volumeYaw'])<1e-6
+   regression.wait_for_timeout(150);rest=regression.evaluate('window.__arplay.state().pos')
+   regression.wait_for_timeout(200);assert regression.evaluate('window.__arplay.state().pos')==rest
+  regression.locator('#demo').click();assert not regression_errors,regression_errors;regression.close()
+  print('PASS ARP-004H SIMULATED Bip 81%: sustained movement, rapid direction changes, camera headings, adopted yaw and rest')
   memory=simulated.new_page();memory_errors=[];memory.on('pageerror',lambda error:memory_errors.append(str(error)))
   memory.goto(base_url+'?test=1');memory.wait_for_function('window.__arplay?.state().frameCount > 3')
   memory.evaluate('Object.assign(window.__xrTest,{spatial:true,highResolution:true})');memory.locator('#ar').click()
@@ -283,7 +308,7 @@ try:
   recovery.wait_for_function('window.__arplay.spatial().blocked',timeout=15000);recovery.keyboard.up('ArrowUp')
   recovery.locator('#demo').click();recovery.wait_for_function("window.__arplay.state().mode === 'demo'")
   assert recovery.evaluate('window.__arplay.spatial().cells')==0
-  saved=recovery.evaluate('window.__arplay.archive()');assert any(e['kind']=='suspended' for e in saved['state']['lifecycle']);assert any(e['kind']=='resumed' for e in saved['state']['lifecycle']);assert saved['lastBlock'] and saved['version']=='1.1.6'
+  saved=recovery.evaluate('window.__arplay.archive()');assert any(e['kind']=='suspended' for e in saved['state']['lifecycle']);assert any(e['kind']=='resumed' for e in saved['state']['lifecycle']);assert saved['lastBlock'] and saved['version']=='1.1.7'
   assert 0<len(saved['state']['blockedCells'])<=8;assert all('freeEvidence' in c and 'reason' in c and 'key' not in c for c in saved['state']['blockedCells']);assert saved['reason']=='mode-change';assert 'previousX' not in saved['lastBlock'];assert saved['session']=='AR-1'
   recovery.locator('#lastDiagnostic').click();assert recovery.locator('#archiveText').inner_text()
   recovery.evaluate("Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async()=>{throw new Error('simulated permission denial')}}})")

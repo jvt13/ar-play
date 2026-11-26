@@ -185,7 +185,7 @@ export class ARCollisions {
   setInput(x,z){this.rawX=x;this.rawZ=z;}
   supportAt(x,z){return this.anchored&&Math.abs(this.normal[1])>1e-8?this.anchor[1]-((x-this.anchor[0])*this.normal[0]+(z-this.anchor[2])*this.normal[2])/this.normal[1]:null;}
   noteRendered(base,shadow,jump){this.renderedBase=Number.isFinite(base)?base:null;this.shadowY=shadow;this.jumpY=jump;if(this.eventCount){const e=this.events[(this.eventCursor+31)%32];if(e.time===this.time){e.renderedBase=this.renderedBase;e.supportDifference=this.renderedBase===null?null:this.renderedBase-this.volume.ground;e.shadowY=shadow;e.visualJump=jump;}}if(this.lastBlockAvailable&&this.lastBlock.time===this.time){this.lastBlock.renderedBase=this.renderedBase;this.lastBlock.supportDifference=this.renderedBase==null?null:this.renderedBase-this.volume.ground;this.lastBlock.shadowY=shadow;this.lastBlock.visualJump=jump;}}
-  setIntent(x, z, time) { this.controlX=x;this.controlZ=z;const n=Math.hypot(x,z),old=Math.hypot(this.intentX,this.intentZ); if(n>1e-8 && (!old || (x*this.intentX+z*this.intentZ)/(n*old)<.5)) this.probe.lastUpdate=-Infinity; this.intentX=x; this.intentZ=z; this.intentTime=n>1e-8 ? time : -Infinity; }
+  setIntent(x, z, time) { this.controlX=x;this.controlZ=z;const n=Math.hypot(x,z),old=Math.hypot(this.intentX,this.intentZ); if(n<=1e-8){this.translationRejects=0;this.translationRejection=null;this.requestedDx=this.requestedDz=this.allowedDx=this.allowedDz=0;} if(n>1e-8 && (!old || (x*this.intentX+z*this.intentZ)/(n*old)<.5)) this.probe.lastUpdate=-Infinity; this.intentX=x; this.intentZ=z; this.intentTime=n>1e-8 ? time : -Infinity; }
   probeState(time = this.time) {
     if (time-this.intentTime>=150) return 'inativa: sem movimento';
     if (!this.tracking) return 'aguardando pose';
@@ -197,7 +197,7 @@ export class ARCollisions {
     this.archive.capture(this.sessionId,this.sessionOrigin,reason,events,this.lastBlockAvailable?this.lastBlock:null,this.snapshot());return this.archive.text();
   }
   diagnosticText() {
-    return JSON.stringify({version:'1.1.6',session:this.sessionId,lastMapClearReason:this.lastMapClearReason,lastBlock:this.lastBlockAvailable?{...this.lastBlock,ageMs:Math.max(0,this.time-this.lastBlock.time)}:null,state:this.snapshot(),events:Array.from({length:this.eventCount},(_,i)=>this.events[(this.eventCursor-this.eventCount+i+32)%32])},null,2);
+    return JSON.stringify({version:'1.1.7',session:this.sessionId,lastMapClearReason:this.lastMapClearReason,lastBlock:this.lastBlockAvailable?{...this.lastBlock,ageMs:Math.max(0,this.time-this.lastBlock.time)}:null,state:this.snapshot(),events:Array.from({length:this.eventCount},(_,i)=>this.events[(this.eventCursor-this.eventCount+i+32)%32])},null,2);
   }
   lifecycle(kind,detail=''){
     if(!this.sessionId)return;
@@ -210,22 +210,25 @@ export class ARCollisions {
     const started=this.now();const changed=this.characterId!==id||this.characterScale!==scale;
     this.characterId=id;this.characterScale=scale;characterVolume(id,scale,position[1],this.volume);this.position.set(position);
     if(this.orientedEnabled)configurePose(this.volume,id,this.poseYaw,this.poseDance);
+    else {this.volume.bodyBounds=null;this.volume.poseMode='legacy-circular';}
     if(changed&&this.anchored){this.placementPending=true;this.lifecycle('body-change','validar eventual sobreposição; sem deslocamento automático');}
     this.characterVolumeMs=Math.max(0,this.now()-started);
   }
   requestPose(yaw,dance,time=this.time){
-    if(!this.orientedEnabled)return true;
     const started=this.now();this.poseDesiredYaw=yaw;
-    if(yaw===this.poseYaw&&!!dance===this.poseDance){this.posePending=false;this.volumeUpdateMs=(this.characterVolumeMs||0)+Math.max(0,this.now()-started);return true;}
-    if(this.posePending&&time-this.poseAttemptAt<125&&this.position[0]===this.poseAttemptX&&this.position[2]===this.poseAttemptZ&&!!dance===this.poseAttemptDance&&yaw===this.poseAttemptYaw){this.volumeUpdateMs=(this.characterVolumeMs||0)+Math.max(0,this.now()-started);return false;}
+    // The legacy all-animation circles are invariant under yaw and dance. Adopt the
+    // controller's heading without a pose query, including when already overlapping.
+    if(!this.orientedEnabled){this.poseYaw=yaw;this.poseDance=!!dance;this.posePending=false;this.poseRejects=0;this.poseRejection=null;this.volumeUpdateMs=(this.characterVolumeMs||0)+Math.max(0,this.now()-started);return true;}
+    if(yaw===this.poseYaw&&!!dance===this.poseDance){this.posePending=false;this.poseRejects=0;this.poseRejection=null;this.volumeUpdateMs=(this.characterVolumeMs||0)+Math.max(0,this.now()-started);return true;}
+    if(this.posePending&&time-this.poseAttemptAt<125&&this.position[0]===this.poseAttemptX&&this.position[2]===this.poseAttemptZ&&!!dance===this.poseAttemptDance&&yaw===this.poseAttemptYaw){this.poseRejects++;this.poseRejection='cached-occupied-target-volume';this.volumeUpdateMs=(this.characterVolumeMs||0)+Math.max(0,this.now()-started);return false;}
     const v=configurePose(characterVolume(this.characterId||'bip',this.characterScale||1,this.volume.ground,this.candidateVolume),this.characterId||'bip',yaw,dance);
     this.poseAttemptAt=time;this.poseAttemptYaw=yaw;this.poseAttemptX=this.position[0];this.poseAttemptZ=this.position[2];this.poseAttemptDance=!!dance;
     // Leaving the all-animation circle is a subset for any heading. Rotating it is invariant.
     const shrinking=this.poseDance,needsCheck=!shrinking&&(!dance||!this.poseDance);
     if(needsCheck&&this.enabled&&this.anchored&&this.supportValid&&this.field.collides(this.position[0],this.position[2],v,time,this.resolver.skin)){
-      this.posePending=true;this.volumeUpdateMs=(this.characterVolumeMs||0)+Math.max(0,this.now()-started);return false;
+      this.posePending=true;this.poseRejects++;this.poseRejection='occupied-target-volume';this.volumeUpdateMs=(this.characterVolumeMs||0)+Math.max(0,this.now()-started);return false;
     }
-    this.poseYaw=yaw;this.poseDance=!!dance;this.posePending=false;configurePose(this.volume,this.characterId||'bip',yaw,dance);this.volumeUpdateMs=(this.characterVolumeMs||0)+Math.max(0,this.now()-started);return true;
+    this.poseYaw=yaw;this.poseDance=!!dance;this.posePending=false;this.poseRejects=0;this.poseRejection=null;configurePose(this.volume,this.characterId||'bip',yaw,dance);this.volumeUpdateMs=(this.characterVolumeMs||0)+Math.max(0,this.now()-started);return true;
   }
   validatePlacement(time){
     if(!this.enabled||!this.anchored||!this.supportValid||(!this.placementPending&&this.placementState!=='occupied'))return;
@@ -394,9 +397,12 @@ export class ARCollisions {
       this.coverage = this.map.coverage(this.result.x, this.result.z, this.volume, time);
     }
     if(this.enabled)this.queryMs=Math.max(0,this.now()-moveStarted);
+    this.requestedDx=dx;this.requestedDz=dz;this.allowedDx=this.result.x-position[0];this.allowedDz=this.result.z-position[2];
+    this.initialOverlap=this.penetrationBefore>0;this.translationRejects=this.blocked?this.translationRejects+1:0;this.translationRejection=this.blocked?this.resolver.result.reason:null;
     if (this.enabled && Math.hypot(dx,dz)>1e-8) {
       if(time-this.lastSlotTime>=250){this.eventCursor=(this.eventCursor+1)%32;this.eventCount=Math.min(32,this.eventCount+1);this.lastSlotTime=time;}
       const event=this.events[(this.eventCursor+31)%32];
+      event.requestedYaw=this.poseDesiredYaw;event.poseRejection=this.poseRejection;event.poseRejects=this.poseRejects;event.translationRejection=this.translationRejection;event.translationRejects=this.translationRejects;event.requestedDx=this.requestedDx;event.requestedDz=this.requestedDz;event.allowedDx=this.allowedDx;event.allowedDz=this.allowedDz;event.initialOverlap=this.initialOverlap;
       event.contactSupportRadius=this.contact?.volumeRadius??null;event.radiusMeaning='conservative-search-envelope';event.sourceMeaning='rejected-attempts-in-this-move';event.volumeMode=this.volume.poseMode||'legacy';event.volumeYaw=this.poseYaw;event.volumeUpdateMs=this.volumeUpdateMs;event.posePending=this.posePending;event.placementState=this.placementState;event.partialAdvance=!!this.resolver.result.usedPartial;
       event.mapGeneration=this.mapGeneration;event.rawX=this.rawX;event.rawZ=this.rawZ;event.transformedX=this.controlX;event.transformedZ=this.controlZ;
       event.probeDirectionX=this.probe.directionX;event.probeDirectionZ=this.probe.directionZ;event.probeTime=Number.isFinite(this.probe.acquiredTime)?this.probe.acquiredTime:null;
@@ -430,7 +436,7 @@ export class ARCollisions {
   }
   snapshot() {
     const planeY=this.supportAt(this.position[0],this.position[2]);
-    return {character:this.characterId??null,scale:this.characterScale??null,lifecycle:this.lifecycleSnapshot(),volumeMode:this.volume.poseMode||'legacy',volumeYaw:this.poseYaw,posePending:this.posePending,requestedYaw:this.poseDesiredYaw,volumeUpdateMs:this.volumeUpdateMs,placementState:this.placementState,placementPenetration:this.placementPenetration??null,mapGeneration:this.mapGeneration??0,contact:this.contact?{...this.contact}:null,blockedCells:this.map.blockedDetails(this.time),acquisitionMs:this.acquisitionMs,nativeReadMs:this.nativeReadMs,readerMs:this.readerMs,projectionMs:this.projectionMs,gridReadMs:this.gridReadMs,pointReconstructionMs:this.pointReconstructionMs,mapUpdateMs:this.mapUpdateMs,contactGeometryMs:this.contactGeometryMs,freeRayMs:this.freeRayMs,freeRayCount:this.freeRayCount,adaptiveReason:this.adaptiveReason,lastReduction:this.lastReduction,session:this.sessionId,suspended:!!this.suspended,lastMapClearReason:this.lastMapClearReason??null,guided:this.guided, guidedNewCells:this.guided?this.map.createdCount-this.guidedBaseline:0, memory:this.map.stats(this.time), revalidationMs:this.revalidator.costMs, revalidationChecks:this.revalidator.checks, revalidationQueries:this.revalidator.queries, memoryEvidence:this.blocked?this.blockEvidence:null, enabled: this.enabled, phase: this.phase(), used: this.used, sampled: this.sampled,
+    return {poseRejection:this.poseRejection,poseRejects:this.poseRejects,translationRejection:this.translationRejection,translationRejects:this.translationRejects,requestedDx:this.requestedDx,requestedDz:this.requestedDz,allowedDx:this.allowedDx,allowedDz:this.allowedDz,initialOverlap:this.initialOverlap,character:this.characterId??null,scale:this.characterScale??null,lifecycle:this.lifecycleSnapshot(),volumeMode:this.volume.poseMode||'legacy',volumeYaw:this.poseYaw,posePending:this.posePending,requestedYaw:this.poseDesiredYaw,volumeUpdateMs:this.volumeUpdateMs,placementState:this.placementState,placementPenetration:this.placementPenetration??null,mapGeneration:this.mapGeneration??0,contact:this.contact?{...this.contact}:null,blockedCells:this.map.blockedDetails(this.time),acquisitionMs:this.acquisitionMs,nativeReadMs:this.nativeReadMs,readerMs:this.readerMs,projectionMs:this.projectionMs,gridReadMs:this.gridReadMs,pointReconstructionMs:this.pointReconstructionMs,mapUpdateMs:this.mapUpdateMs,contactGeometryMs:this.contactGeometryMs,freeRayMs:this.freeRayMs,freeRayCount:this.freeRayCount,adaptiveReason:this.adaptiveReason,lastReduction:this.lastReduction,session:this.sessionId,suspended:!!this.suspended,lastMapClearReason:this.lastMapClearReason??null,guided:this.guided, guidedNewCells:this.guided?this.map.createdCount-this.guidedBaseline:0, memory:this.map.stats(this.time), revalidationMs:this.revalidator.costMs, revalidationChecks:this.revalidator.checks, revalidationQueries:this.revalidator.queries, memoryEvidence:this.blocked?this.blockEvidence:null, enabled: this.enabled, phase: this.phase(), used: this.used, sampled: this.sampled,
       occupied: this.map.occupiedCount, cells: this.map.cells.size, freeCells: this.map.free.size,
       hz: this.hz, reconstructionMs: this.reconstructionMs, queryMs: this.queryMs,
       coverage: this.coverage, direction: this.direction, blocked: this.blocked,
@@ -461,6 +467,7 @@ export class ARCollisions {
     if(readout&&this.enabled&&diagnosticOpen){readout.textContent+='\nÚltima limpeza: '+(this.lastMapClearReason||'indisponível')+'\nAdaptação: '+(this.adaptiveReason||'aguardando')+'\nAquisição / grade / pontos / mapa / raios / revalidação (ms): '+[this.acquisitionMs,this.gridReadMs,this.pointReconstructionMs,this.mapUpdateMs,this.freeRayMs,this.revalidator.costMs].map(v=>v==null?'—':v.toFixed(2)).join(' / ')+'\nRaios livres: '+this.freeRayCount+' (máximo 96)';if(this.contact)readout.textContent+='\nContato estimado: centro→superfície '+this.contact.surfaceDistance.toFixed(3)+' m; folga do volume '+this.contact.clearance.toFixed(3)+' m; margem/pele '+this.map.config.pointMargin+'/'+this.resolver.skin+' m; célula '+this.contact.cellId+'; '+this.contact.state+'; evidências livres '+this.contact.freeEvidence;}
     if(readout&&this.enabled&&diagnosticOpen){const m=this.map.stats(time);readout.textContent+='\nMemória: '+m.candidates+' candidatas; '+m.confirmed+' confirmadas totais; '+m.consolidated+' consolidadas; '+m.awaiting+' aguardando revalidação\nIdade máxima: '+(m.oldestAgeMs===null?'indisponível':(m.oldestAgeMs/1000).toFixed(1)+' s')+'\nRevalidadas / liberadas / expiradas: '+[m.revalidated,m.released,m.expired].join(' / ')+'\nOclusas preservadas: '+m.occluded+'; observações oclusas: '+m.occlusionObservations+'\nSaturação / descartes / recusas: '+[m.saturated,m.evicted,m.rejected].join(' / ')+'\nRevalidação: '+(this.revalidator.costMs===null?'indisponível':this.revalidator.costMs.toFixed(2)+' ms')+'; consultas '+this.revalidator.queries+'\nManutenção: '+(m.maintenanceMs===null?'indisponível':m.maintenanceMs.toFixed(2)+' ms')+'\nMapeamento guiado: '+(this.guided?'ativo':'desativado')+'\nBloqueio temporal: '+(this.blocked?this.blockEvidence:'sem bloqueio atual');}
     if(readout&&this.enabled&&diagnosticOpen)readout.textContent+='\nVolume: '+(this.volume.poseMode||'legacy')+'; yaw '+this.poseYaw.toFixed(3)+'; '+(this.posePending?'orientação aguardando espaço':'pose ativa')+'\nAtualização do volume: '+(this.volumeUpdateMs==null?'—':this.volumeUpdateMs.toFixed(3)+' ms')+'\nPosicionamento: '+this.placementState+'\nEtapa rejeitada: '+(this.lastBlockAvailable?this.lastBlock.failureStage||'—':'—')+'; fonte da consulta: '+(this.lastBlockAvailable?this.lastBlock.failureSource||'—':'—');
+    if(readout&&this.enabled&&diagnosticOpen)readout.textContent+='\nOrientação pretendida / adotada: '+this.poseDesiredYaw.toFixed(3)+' / '+this.poseYaw.toFixed(3)+'; rejeição: '+(this.poseRejection||'—')+'; consecutivas: '+this.poseRejects+'\nTranslação rejeitada: '+(this.translationRejection||'—')+'; consecutivas: '+this.translationRejects+'\nSolicitado / permitido X,Z (m): '+[this.requestedDx,this.requestedDz,this.allowedDx,this.allowedDz].map(v=>v.toFixed(4)).join(' / ')+'; sobreposição inicial: '+this.initialOverlap;
     this.diagnosticMs=Math.max(0,this.now()-diagnosticStarted);
     if (!canvas) return;
     canvas.hidden = !this.enabled || !this.visual || !diagnosticOpen;
@@ -508,6 +515,7 @@ export class ARCollisions {
     if(this.sessionActive){this.lifecycle(reason);this.time=Math.max(this.time||0,this.now());const events=[];for(let i=0;i<this.eventCount;i++)events.push(this.events[(this.eventCursor-this.eventCount+i+32)%32]);this.archive.capture(this.sessionId,this.sessionOrigin,reason,events,this.lastBlockAvailable?this.lastBlock:null,this.snapshot());}
     if(this.elements.copyButton)this.elements.copyButton.textContent='Copiar diagnóstico textual';if(this.elements.feedback)this.elements.feedback.textContent='';
     this.posePending=false;this.poseDesiredYaw=this.poseYaw||0;this.poseAttemptAt=-Infinity;this.placementState='not-placed';this.placementPending=false;this.placementPenetration=null;
+    this.poseRejection=this.translationRejection=null;this.poseRejects=this.translationRejects=0;this.requestedDx=this.requestedDz=this.allowedDx=this.allowedDz=0;this.initialOverlap=false;
     this.contact=null;this.lastRender=-Infinity;if(this.elements.status){this.elements.status.hidden=true;this.elements.status.textContent='';}
     this.lastMapClearReason=reason;this.mapGeneration=(this.mapGeneration||0)+1;
     this.acquisitionMs=this.nativeReadMs=this.readerMs=this.projectionMs=this.gridReadMs=this.pointReconstructionMs=this.mapUpdateMs=this.contactGeometryMs=this.freeRayMs=null;this.freeRayCount=0;this.adaptiveReason=null;this.lastReduction=null;this.rayTags.fill(0);this.rayStamp=this.rayCursor=0;

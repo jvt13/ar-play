@@ -1,4 +1,5 @@
 // SYNTHETIC geometry. The supplied phone diagnosis does not include a scene reconstruction.
+// ARP-004H: oriented tests explicitly opt in; the application defaults to circular.
 import test from 'node:test';import assert from 'node:assert/strict';
 import {ARCollisions,CollisionResolver,characterVolume} from '../src/collision.js';
 import {configurePose,supportAt,radiusAt} from '../src/volume.js';
@@ -137,7 +138,7 @@ test('same reference suspension preserves memory; new session and reference rese
 
 test('lifecycle log is bounded and anonymised; fresh placements replace old-generation state',()=>{
  const s=posedSystem();for(let i=0;i<30;i++){s.setVisibility('hidden');s.setVisibility('visible');}
- let saved=JSON.parse(s.exportText());assert.ok(saved.state.lifecycle.length<=16);assert.equal(saved.version,'1.1.6');
+ let saved=JSON.parse(s.exportText());assert.ok(saved.state.lifecycle.length<=16);assert.equal(saved.version,'1.1.7');
  assert.ok(!s.archive.text().includes('previousX'));s.place([1,-1,2]);saved=JSON.parse(s.exportText());assert.equal(saved.mapGeneration,s.mapGeneration);assert.equal(saved.state.placementState,'waiting-for-data');assert.equal(saved.lastBlock,null);
 });
 

@@ -1,4 +1,4 @@
-# AR Play — v1.1.6 (MVP)
+# AR Play — v1.1.7 (MVP)
 
 Aplicativo web de personagens 3D interativos, inspirado na experiência de câmera com efeitos de realidade aumentada. Não é uma reprodução do TikTok. Os três personagens (Bip, Nori e Luma) são construídos proceduralmente, sem baixar modelos ou usar ativos proprietários.
 
@@ -40,7 +40,7 @@ A câmera, renderização e gravação são processadas localmente. O app não e
 
 ## Testes
 
-`npm test`: 143 testes, incluindo reconstrução 3D, projeções assimétricas, chão, confirmação/expiração, cobertura desconhecida, paredes/móveis, posições efetivas, recuo, deslizamento, escala e limpeza. A correção 1.1.1 acrescenta bloqueio imediato com mapa parcial, persistência lateral, liberação confiável, limites geométricos do contato e saída de sobreposição. A expiração de ocupação descarta votos livres fracos anteriores e retorna a desconhecido. O cache atual é `ar-play-v1.1.6`. `npm run check` valida a sintaxe JavaScript. Geometria e sessões automatizadas são sintéticas; a suíte de navegador também verifica a integração XR simulada, a sonda com diagnóstico fechado e a preservação dos modos existentes.
+`npm test`: 196 testes, incluindo reconstrução 3D, projeções assimétricas, chão, confirmação/expiração, cobertura desconhecida, paredes/móveis, posições efetivas, recuo, deslizamento, escala e limpeza. A correção 1.1.1 acrescenta bloqueio imediato com mapa parcial, persistência lateral, liberação confiável, limites geométricos do contato e saída de sobreposição. A expiração de ocupação descarta votos livres fracos anteriores e retorna a desconhecido. O cache atual é `ar-play-v1.1.7`. `npm run check` valida a sintaxe JavaScript. Geometria e sessões automatizadas são sintéticas; a suíte de navegador também verifica a integração XR simulada, a sonda com diagnóstico fechado e a preservação dos modos existentes.
 
 Benchmark CPU opcional: `node tests/spatial_benchmark.mjs`. Usa geometria sintética, informa ambiente, mediana, p95 e máximos; não mede sensor, câmera ou desempenho no celular.
 
@@ -48,19 +48,25 @@ Suíte de navegador: instale Python 3.12+, Playwright (`python -m pip install pl
 
 Câmera física, sensores, instalação no Android e ARCore exigem validação no aparelho. Os testes de navegador usam câmera simulada e não homologam WebXR/ARCore.
 
-## Volume orientado e posicionamento — 1.1.6
+## Recuperação da jogabilidade — 1.1.7 (ARP-004H)
 
-Repouso e caminhada agora compartilham um envelope por orientação, em 12 faixas de altura, derivado das transformações dos modelos inalterados. `src/body-profiles.js` contém limites pré-calculados; `src/volume.js` consulta eixos separadores entre esse corpo, os limites medidos do mapa e os segmentos da sonda. O envelope circular anterior continua limitando a consulta e é usado integralmente na dança. Margem de 2,5 cm, pele de 1,5 cm, retenção de 45 s e memória da sonda de 900 ms permanecem. Não há redução arbitrária do corpo nem ajuste da altura pelo sensor.
+O padrão volta aos 12 cilindros circulares da 1.1.5, conservadores para todas as orientações e animações. Giro e dança adotam a orientação do controle sem consulta espacial de pose: o volume circular é invariável. Translação, recuo e deslizamento continuam passando pelo mesmo resolvedor e pelas mesmas proteções de contato. Margem de 2,5 cm, pele de 1,5 cm, voxels de 12 cm, retenção de 45 s e sonda de 900 ms permanecem.
 
-O giro e a expansão para dança verificam o espaço conhecido antes de mudar o volume. Próximo a um obstáculo, a orientação pode aguardar espaço; afaste-se ou repita a dança. O controle continua relativo à câmera e pode recuar/deslizar usando a pose atual. Pulo preserva a proteção horizontal no apoio. A visualização azul mostra os dois limites consultados (caixa orientada e círculo legado por faixa); a região física é limitada por ambos, e essas linhas não são uma malha do personagem.
+O volume orientado da 1.1.6 fica experimental, desativado na aplicação e acessível somente por `new ARCollisions({}, {orientedVolume:true})` em desenvolvimento/testes. Há um único resolvedor e campo de colisões por controlador. Os testes orientados em `tests/oriented.test.js` e os ensaios de rejeição de pose continuam explícitos. O perfil circular pode parar antes do corpo em repouso e precisa de corredores mais largos; a estabilidade tem prioridade nesta versão. A visualização azul mostra as faixas circulares efetivamente usadas.
+
+A comparação dirigida usou 14e6ca2 (1.1.5) e d7ac837 (1.1.6), as mesmas geometrias e sequências em 40%, 54%, 66%, 81% e 100%. A 1.1.6 rejeitou giros próximos a ocupações e durante sobreposição; os ensaios não reproduziram um bloqueio geral de translação. Sem JSON da regressão física, a causa completa permanece não confirmada. A candidata circular reproduz as 40 combinações de referência de deslocamento e contato da 1.1.5, sem novas penetrações nos cenários controlados. A origem dos valores está em `tests/fixtures/recovery-v115.json`.
 
 Em um corredor diagonal, quando os dois eixos separados estão bloqueados mas parte do vetor original está livre, o resolvedor permite essa parte até contato. O diagnóstico distingue a fonte/etapa da última subconsulta rejeitada do contato representativo na posição final: penetrações desses contatos diferentes não devem ser subtraídas. O raio geral é o envelope de busca; o apoio direcional do contato é registrado separadamente.
 
-Posicionamento adota imediatamente a altura do hit-test. Novas evidências podem indicar **Posição sobreposta: afaste-se ou reposicione**, sem teletransporte ou imunidade. Reposicionar limpa o mapa dependente do apoio; uma nova sessão começa vazia. Contato/mensagem antigos são limpos imediatamente ao mudar a geração. O diagnóstico recuperável inclui até 16 eventos de início, posicionamento, suspensão/retomada e limpeza, identificados por sessão/geração, sem coordenadas absolutas. Alterações de personagem/escala podem criar sobreposição: afaste-se ou reposicione.
+Posicionamento adota imediatamente a altura do hit-test. Novas evidências podem indicar **Posição sobreposta: afaste-se ou reposicione**, sem teletransporte ou imunidade. Reposicionar limpa o mapa dependente do apoio; uma nova sessão começa vazia. Contato/mensagem antigos são limpos imediatamente ao mudar a geração. O diagnóstico recuperável inclui até 16 eventos de início, posicionamento, suspensão/retomada e limpeza, identificados por sessão/geração, sem coordenadas absolutas. Alterações de personagem/escala podem criar sobreposição: afaste-se ou reposicione. São preservados avanço parcial válido, reconstrução otimizada, memória adaptativa e mapeamento guiado. Não há física vertical nem mudanças nos personagens, Estúdio ou Câmera.
 
 Células bloqueantes continuam priorizadas para revalidação. O texto informa visibilidade da pegada, amostras coerentes/distintas e idade da última consulta. Pegada parcialmente fora da vista não é liberada por observar apenas o centro. Observe centro e bordas da região antiga por várias atualizações; dados insuficientes/oclusão preservam ocupação válida. Isso não certifica a precisão física nem identifica automaticamente obstáculos fantasmas.
 
-Homologação física da **1.1.6 pendente**. Compare os três personagens em 40%, 54%, 66% e 100%, giros, caminhada, dança, pulo, recuo/deslizamento e objetos pequenos. Teste suspensão/retorno na mesma sessão, saída/novo AR e reposicionamento. Após um bloqueio suspeito, solte o joystick e copie/exporte o diagnóstico antes de recarregar. Benchmarks CPU sintéticos: `node --expose-gc tests/spatial_benchmark.mjs`, `node --expose-gc tests/memory_benchmark.mjs` e `node tests/volume_benchmark.mjs`; não garantem desempenho Android.
+O diagnóstico informa perfil físico, orientação pretendida/adotada, motivo e contagem de rejeições de pose/translação, deslocamento solicitado/permitido e sobreposição inicial. Os dados vêm do controlador real; continuam limitados, anônimos, em memória JS, com exportação JSON e recuperação após o fim da sessão.
+
+Homologação física da **1.1.7 pendente**. Comece com Bip a **81%**, faça mapeamento guiado e percorra uma área conhecida: avance, recue após contato, deslize na parede, gire parado e inverta rapidamente o joystick. Retire um objeto e observe toda a região por várias atualizações. Repita em 40%, 54%, 66% e 100% e teste suspensão/retomada e nova sessão. Após bloqueio suspeito, solte o joystick e exporte o diagnóstico antes de recarregar.
+
+Benchmarks CPU sintéticos: `node --expose-gc tests/spatial_benchmark.mjs`, `node --expose-gc tests/memory_benchmark.mjs` e `node tests/volume_benchmark.mjs`. Para comparação histórica, extraia `src/` dos commits 14e6ca2 e d7ac837 para `reports/v115` e `reports/v116`, respectivamente, cada um com `package.json` contendo `{"type":"module"}`. Execute `node tests/recovery_compare.mjs reports/v115 reports/v116` e `node tests/recovery_benchmark.mjs reports/v115 reports/v116`. Não medem FPS Android nem certificam comportamento físico.
 
 ## Contato e recuperação do diagnóstico — 1.1.5
 
