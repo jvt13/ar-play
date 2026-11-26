@@ -7,7 +7,7 @@
 - Orçamento de raios livres redundantes de 96 por atualização; endpoints ocupados preservados. Estágios temporizados e recuperação adaptativa com margem de processamento.
 - Diagnóstico de contato, células bloqueantes e destaque 3D; arquivo textual anônimo/limitado em memória JS, recuperável fora de AR, com cópia explícita, exportação JSON e limpeza.
 - Suspensão por visibilidade na mesma referência; limpeza obrigatória em invalidação/reset/fim e isolamento entre sessões.
-- Cache ar-play-v1.1.5 com diagnostics.js; testes geométricos/temporais/lifecycle e navegador ampliados. Sem novas dependências, mudanças nos modelos ou homologação física antecipada.
+- Cache ar-play-v1.1.5-r2 com diagnostics.js e metadados anônimos das células bloqueantes no texto recuperado; testes geométricos/temporais/lifecycle e navegador ampliados. Sem novas dependências, mudanças nos modelos ou homologação física antecipada.
 
 ## 1.1.4 — 2026-11-25
 

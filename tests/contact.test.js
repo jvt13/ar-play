@@ -27,6 +27,11 @@ test('directed geometric clearance handles a small displacement below legacy 18 
  const r=new SpatialRevalidator(()=>0),f=fixture(1.29),p=new DepthProjector();p.configure(f.info,f.view);
  for(const t of [8000,8250,8500,8750]){m.begin(t,[0,0,0],1);r.update(t,createDepthReader(f.info,'luminance-alpha'),p,f.view.projectionMatrix,m,[0,0,0],volume,0,-.55);}
  assert.notEqual(m.stateAt(.02,.3,-1.2,8750),'occupied');
+ // A near measurement only 3 cm deeper is insufficient to prove this envelope empty.
+ const keep=new SpatialMap();keep.clear([0,0,0]);for(let t=0;t<=2000;t+=125){keep.begin(t,[0,0,0],1);keep.observe(.02,.3,-1.2);}
+ const near=fixture(1.23),q=new DepthProjector(),safe=new SpatialRevalidator(()=>0);q.configure(near.info,near.view);
+ for(const t of [8000,8250,8500,8750]){keep.begin(t,[0,0,0],1);safe.update(t,createDepthReader(near.info,'luminance-alpha'),q,near.view.projectionMatrix,keep,[0,0,0],volume,0,-.55);}
+ assert.equal(keep.stateAt(.02,.3,-1.2,8750),'occupied');
 });
 
 test('known-wall contact and actual rendered body are measured at 40,54,66,100 percent for all models',()=>{
@@ -135,8 +140,8 @@ test('visible pose invalidation clears geometry while preserving an anonymous la
 
 test('archived text is bounded, versioned, isolated and does not retain raw geometry or absolute positions',()=>{
  const a=new DiagnosticArchive(()=>2000),id=a.begin(),events=Array.from({length:200},(_,i)=>({time:i,dx:.1,actualX:.1,previousX:12345,previousZ:6789,source:'x'.repeat(1000)}));
- a.capture(id,0,'session-end',events,events[199],{phase:'limited',supportY:999,points:new Float32Array(14400)});
- const text=a.text(),record=JSON.parse(text);assert.ok(new TextEncoder().encode(text).length<=32000);assert.equal(record.version,'1.1.5');assert.equal(record.session,id);assert.ok(record.events.length<=32);assert.ok(!text.includes('12345'));assert.ok(!text.includes('points'));assert.ok(record.lastBlock);
+ a.capture(id,0,'session-end',events,events[199],{phase:'limited',supportY:999,points:new Float32Array(14400),blockedCells:[{id:7,state:'revalidating',ageMs:1000,freeEvidence:2,reason:'evidência contraditória',key:8877,minX:12345}],contact:{cellId:7,state:'revalidating',clearance:.04,surfaceDistance:.24,pointMargin:.025,skin:.015,absoluteX:12345}});
+ const text=a.text(),record=JSON.parse(text);assert.ok(new TextEncoder().encode(text).length<=32000);assert.equal(record.version,'1.1.5');assert.equal(record.session,id);assert.ok(record.events.length<=32);assert.ok(!text.includes('12345'));assert.ok(!text.includes('points'));assert.ok(record.lastBlock);assert.equal(record.state.blockedCells[0].id,7);assert.equal(record.state.blockedCells[0].freeEvidence,2);assert.equal(record.state.blockedCells[0].reason,'evidência contraditória');assert.ok(!('key' in record.state.blockedCells[0]));assert.ok(!('minX' in record.state.blockedCells[0]));assert.equal(record.state.contact.clearance,.04);assert.ok(!('absoluteX' in record.state.contact));
  events[199].dx=999;assert.equal(a.last.lastBlock.dx,.1);a.clear();assert.equal(a.text(),'');
 });
 

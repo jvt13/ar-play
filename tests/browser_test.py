@@ -282,7 +282,7 @@ try:
   recovery.locator('#demo').click();recovery.wait_for_function("window.__arplay.state().mode === 'demo'")
   assert recovery.evaluate('window.__arplay.spatial().cells')==0
   saved=recovery.evaluate('window.__arplay.archive()');assert saved['lastBlock'] and saved['version']=='1.1.5'
-  assert saved['reason']=='mode-change';assert 'previousX' not in saved['lastBlock'];assert saved['session']=='AR-1'
+  assert 0<len(saved['state']['blockedCells'])<=8;assert all('freeEvidence' in c and 'reason' in c and 'key' not in c for c in saved['state']['blockedCells']);assert saved['reason']=='mode-change';assert 'previousX' not in saved['lastBlock'];assert saved['session']=='AR-1'
   recovery.locator('#lastDiagnostic').click();assert recovery.locator('#archiveText').inner_text()
   recovery.evaluate("Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async()=>{throw new Error('simulated permission denial')}}})")
   recovery.locator('#copyArchive').click();recovery.wait_for_function('document.querySelector("#archiveFeedback").textContent.includes("Falha")')

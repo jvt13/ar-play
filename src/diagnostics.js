@@ -18,6 +18,8 @@ export class DiagnosticArchive {
     reasons.push({atMs:Math.max(0,this.now()-origin),reason:String(reason).slice(0,160)});
     const record={version:'1.1.5',session,mapGeneration:state?.mapGeneration??0,scope:'diagnóstico textual anônimo; sem geometria ou coordenadas absolutas',reason:String(reason).slice(0,160),reasons,lastBlock:clean(block)||(same?this.last.lastBlock:null),events:events.slice(-32).map(clean),state:scalars(state,STATE_FIELDS)};
     if(state?.memory)record.state.memory=scalars(state.memory,['candidates','confirmed','consolidated','awaiting','occluded','oldestAgeMs','revalidated','released','expired','evicted','rejected','saturated','maintenanceMs']);
+    if(state?.blockedCells)record.state.blockedCells=state.blockedCells.slice(0,8).map(cell=>scalars(cell,['id','state','ageMs','freeEvidence','reason','refined']));
+    if(state?.contact)record.state.contact=scalars(state.contact,['cellId','kind','state','ageMs','freeEvidence','reason','refined','surfaceDistance','volumeRadius','clearance','pointMargin','skin']);
     if(same&&!record.events.length)record.events=this.last.events;
     bounded(record);
     this.last=record;this.onchange?.();
