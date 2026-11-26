@@ -82,9 +82,10 @@ export class SpatialRevalidator {
         map.markFree(cell.ix,cell.iy,cell.iz,'targeted');
         if(before&&!map.cells.has(cell.key))this.freed++;
       } else if(Math.abs(central-expected)<=tolerance){
+        if(map.ground?.boundsAreFloor(cell)&&map.ground.isMeasuredFloor(this.point[0],this.point[1],this.point[2])){cell.revalidationReason='current anchored ground observations';map.observeGround(this.point[0],this.point[1],this.point[2]);continue;}
         cell.revalidationReason='objeto presente ou mudança abaixo da resolução de liberação';
         const before=cell.time;
-        map.observe(this.point[0],this.point[1],this.point[2],true);
+        map.observe(this.point[0],this.point[1],this.point[2],true,'revalidation-depth');
         if(cell.time===time&&before!==time){this.refreshed++;}
       } else {cell.visibility='ambiguous';cell.revalidationReason='evidência contraditória ou liberação parcial';map.resetContrary(cell);}
     }

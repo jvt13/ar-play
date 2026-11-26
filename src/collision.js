@@ -1,4 +1,5 @@
 import {BUILD} from './build.js';
+import {GroundEvidence} from './ground.js';
 import {PROFILES} from './volume.js';
 import {clamp} from './math.js';
 import {DepthProjector, SpatialMap} from './spatial-map.js';
@@ -124,7 +125,7 @@ export class ARCollisions {
     this.elements = elements; this.now = now;this.archive=elements.archive||new DiagnosticArchive(now);this.sessionId=null;this.sessionOrigin=0;
     const {orientedVolume=false,...mapConfig}=config;this.orientedEnabled=false;this.poseYaw=0;this.poseDance=false;this.posePending=false;this.poseDesiredYaw=0;this.poseAttemptAt=-Infinity;this.volumeUpdateMs=null;
     this.lifeEvents=Array.from({length:16},()=>({}));this.lifeCount=this.lifeCursor=0;
-    this.map = new SpatialMap(mapConfig); this.projector = new DepthProjector(); this.resolver = new CollisionResolver();
+    this.map = new SpatialMap(mapConfig);this.ground=new GroundEvidence(this.map,now);this.map.ground=this.ground; this.projector = new DepthProjector(); this.resolver = new CollisionResolver();
     this.probe = new MovementProbe(this.map.config);
     this.revalidator=new SpatialRevalidator(now);
     this.map.onRelease=cell=>this.probe.invalidateCell(cell,this.map.origin,this.map.config.cellSize);
@@ -152,6 +153,7 @@ export class ARCollisions {
       },
     };
     this.rayTags=new Uint32Array(432);this.rayStamp=0;this.rayCursor=0;this.depths = new Float32Array(432); this.points = new Float32Array(432 * 3);
+    this.localPoints=new Float64Array(15);this.localIds=new Int32Array(5);this.localQueries=this.localAccepted=0;
     this.point = new Float64Array(3); this.position = new Float64Array(3); this.anchor = new Float64Array(3);
     this.normal = new Float64Array(3);
     this.volume = characterVolume('bip', 1, 0); this.result = {x: 0, z: 0};
@@ -256,6 +258,7 @@ export class ARCollisions {
   }
   setVisibility(state){const next=state!=='visible';if(next!==this.suspended)this.lifecycle(next?'suspended':'resumed',state);this.suspended=next;this.visibilityState=state;this.previousFrame=NaN;}
   frame(time, poseValid) {
+    this.ground.queryTime=time;
     if (!this.enabled||this.suspended) return;
     this.time = time; this.frameDt = Number.isFinite(this.previousFrame) ? Math.max(0, time - this.previousFrame) / 1000 : .05; this.previousFrame = time; if (!Number.isFinite(this.enabledAt)) this.enabledAt = time;
     this.blocked = false; this.direction = ''; this.blockSource = '';
@@ -300,6 +303,7 @@ export class ARCollisions {
       const d=reader.at((x+.5)/columns,(y+.5)/rows,true);if(d!==null&&d>=.15&&d<=6)this.depths[y*columns+x]=d;
     }
     this.gridReadMs=Math.max(0,this.now()-mapStarted);const pointStarted=this.now();let count=0;
+    this.localQueries=this.localAccepted=0;
     for(let y=0;y<rows;y++)for(let x=0;x<columns;x++){
       const i=y*columns+x,d=this.depths[i];if(!d)continue;
       const tolerance=Math.max(.08,d*.04);let neighbors=0;
@@ -307,13 +311,33 @@ export class ARCollisions {
       if(x+1<columns&&this.depths[i+1]&&Math.abs(this.depths[i+1]-d)<=tolerance)neighbors++;
       if(y&&this.depths[i-columns]&&Math.abs(this.depths[i-columns]-d)<=tolerance)neighbors++;
       if(y+1<rows&&this.depths[i+columns]&&Math.abs(this.depths[i+columns]-d)<=tolerance)neighbors++;
-      if(neighbors<2||!this.projector.point((x+.5)/columns,(y+.5)/rows,d,this.point))continue;
+      if(!this.projector.point((x+.5)/columns,(y+.5)/rows,d,this.point))continue;
+      if(neighbors<2){
+        // A sparse grid can miss the neighbours of a thin object. Spend at most twelve
+        // extra native reads per reconstruction, only around an actual above-floor return.
+        // Three distinct, nearby measured pixels are still required; missing data adds none.
+        if(this.localQueries>=12||count+5>432||!this.map.inRegion(this.point[0],this.point[1],this.point[2]))continue;
+        const u=(x+.5)/columns,v=(y+.5)/rows;let support=1;
+        this.localPoints.set(this.point);this.localQueries++;reader.at(u,v,true);this.localIds[0]=reader.lastIndex;
+        for(let k=0;k<4&&this.localQueries<12;k++){
+          const a=u+(k<2?(k?1:-1)/reader.width:0),b=v+(k>=2?(k===3?1:-1)/reader.height:0);
+          this.localQueries++;const measured=reader.at(a,b,true),id=reader.lastIndex;
+          if(measured==null||Math.abs(measured-d)>tolerance||!this.projector.point(a,b,measured,this.point))continue;
+          let duplicate=false;for(let j=0;j<support;j++)if(this.localIds[j]===id)duplicate=true;
+          if(duplicate||Math.hypot(this.point[0]-this.localPoints[0],this.point[1]-this.localPoints[1],this.point[2]-this.localPoints[2])>.06||!this.map.inRegion(this.point[0],this.point[1],this.point[2]))continue;
+          this.localIds[support]=id;this.localPoints.set(this.point,support++*3);
+        }
+        if(support>=3){for(let j=0;j<support*3;j++)this.points[count*3+j]=this.localPoints[j];count+=support;this.localAccepted+=support;}
+        continue;
+      }
       const j=count++*3;this.points[j]=this.point[0];this.points[j+1]=this.point[1];this.points[j+2]=this.point[2];
     }
-    this.pointReconstructionMs=Math.max(0,this.now()-pointStarted);const updateStarted=this.now();
+    this.pointReconstructionMs=Math.max(0,this.now()-pointStarted);
+    this.ground.update(time,this.points,count);this.probe.discardGround(this.ground);
+    const updateStarted=this.now();
     this.map.begin(time,this.position,this.volume.height,this.projector.pose);
-    if(this.probe.lastUpdate===time)for(let i=0;i<this.probe.sampleCount;i++)if(this.probe.coherent[i])this.map.observe(this.probe.samples[i*3],this.probe.samples[i*3+1],this.probe.samples[i*3+2]);
-    for(let i=0;i<count*3;i+=3)this.map.observe(this.points[i],this.points[i+1],this.points[i+2]);
+    if(this.probe.lastUpdate===time)for(let i=0;i<this.probe.sampleCount;i++)if(this.probe.coherent[i])this.map.observe(this.probe.samples[i*3],this.probe.samples[i*3+1],this.probe.samples[i*3+2],false,'probe-depth');
+    for(let i=0;i<count*3;i+=3){const x=this.points[i],y=this.points[i+1],z=this.points[i+2];if(this.ground.labels[i/3]===1)this.map.observeGround(x,y,z);else this.map.observe(x,y,z,false,this.ground.labels[i/3]===0?'uncertain-grid-depth':'grid-depth');}
     this.mapUpdateMs=Math.max(0,this.now()-updateStarted);const geometryStarted=this.now();this.map.finishGeometry();this.contactGeometryMs=Math.max(0,this.now()-geometryStarted);
     const freeStarted=this.now(),pose=this.projector.pose;this.freeRayCount=0;this.rayStamp++;
     // Keep every reconstructed occupied endpoint. Bound only redundant free-space rays,
@@ -410,9 +434,13 @@ export class ARCollisions {
     if (this.depthState !== 'available' || this.map.saturated || this.coverage < .6) return 'limited';
     return 'active';
   }
+  directionCoverage(){
+    const n=Math.hypot(this.intentX,this.intentZ);if(n<1e-8)return null;
+    return this.map.coverage(this.position[0]+this.intentX/n*(this.volume.radius+.4),this.position[2]+this.intentZ/n*(this.volume.radius+.4),this.volume,this.time);
+  }
   snapshot() {
     const planeY=this.supportAt(this.position[0],this.position[2]);
-    return {runtime:this.archive.runtimeInfo?.()||BUILD,placementMeasurement:'move-start',poseRejection:this.poseRejection,poseRejects:this.poseRejects,translationRejection:this.translationRejection,translationRejects:this.translationRejects,requestedDx:this.requestedDx,requestedDz:this.requestedDz,allowedDx:this.allowedDx,allowedDz:this.allowedDz,initialOverlap:this.initialOverlap,character:this.characterId??null,scale:this.characterScale??null,lifecycle:this.lifecycleSnapshot(),volumeMode:this.volume.poseMode||'legacy',volumeYaw:this.poseYaw,posePending:this.posePending,requestedYaw:this.poseDesiredYaw,volumeUpdateMs:this.volumeUpdateMs,placementState:this.placementState,placementPenetration:this.placementPenetration??null,mapGeneration:this.mapGeneration??0,contact:this.contact?{...this.contact}:null,blockedCells:this.map.blockedDetails(this.time),acquisitionMs:this.acquisitionMs,nativeReadMs:this.nativeReadMs,readerMs:this.readerMs,projectionMs:this.projectionMs,gridReadMs:this.gridReadMs,pointReconstructionMs:this.pointReconstructionMs,mapUpdateMs:this.mapUpdateMs,contactGeometryMs:this.contactGeometryMs,freeRayMs:this.freeRayMs,freeRayCount:this.freeRayCount,adaptiveReason:this.adaptiveReason,lastReduction:this.lastReduction,session:this.sessionId,suspended:!!this.suspended,lastMapClearReason:this.lastMapClearReason??null,guided:this.guided, guidedNewCells:this.guided?this.map.createdCount-this.guidedBaseline:0, memory:this.map.stats(this.time), revalidationMs:this.revalidator.costMs, revalidationChecks:this.revalidator.checks, revalidationQueries:this.revalidator.queries, memoryEvidence:this.blocked?this.blockEvidence:null, enabled: this.enabled, phase: this.phase(), used: this.used, sampled: this.sampled,
+    return {localQueries:this.localQueries,localAccepted:this.localAccepted,ground:this.ground.snapshot(),directionalCoverage:this.directionCoverage(),initialBlockReason:this.initialOverlap?'known-overlap-at-move-start':this.updates?'no-known-overlap':'not-yet-observed',runtime:this.archive.runtimeInfo?.()||BUILD,placementMeasurement:'move-start',poseRejection:this.poseRejection,poseRejects:this.poseRejects,translationRejection:this.translationRejection,translationRejects:this.translationRejects,requestedDx:this.requestedDx,requestedDz:this.requestedDz,allowedDx:this.allowedDx,allowedDz:this.allowedDz,initialOverlap:this.initialOverlap,character:this.characterId??null,scale:this.characterScale??null,lifecycle:this.lifecycleSnapshot(),volumeMode:this.volume.poseMode||'legacy',volumeYaw:this.poseYaw,posePending:this.posePending,requestedYaw:this.poseDesiredYaw,volumeUpdateMs:this.volumeUpdateMs,placementState:this.placementState,placementPenetration:this.placementPenetration??null,mapGeneration:this.mapGeneration??0,contact:this.contact?{...this.contact}:null,blockedCells:this.map.blockedDetails(this.time),acquisitionMs:this.acquisitionMs,nativeReadMs:this.nativeReadMs,readerMs:this.readerMs,projectionMs:this.projectionMs,gridReadMs:this.gridReadMs,pointReconstructionMs:this.pointReconstructionMs,mapUpdateMs:this.mapUpdateMs,contactGeometryMs:this.contactGeometryMs,freeRayMs:this.freeRayMs,freeRayCount:this.freeRayCount,adaptiveReason:this.adaptiveReason,lastReduction:this.lastReduction,session:this.sessionId,suspended:!!this.suspended,lastMapClearReason:this.lastMapClearReason??null,guided:this.guided, guidedNewCells:this.guided?this.map.createdCount-this.guidedBaseline:0, memory:this.map.stats(this.time), revalidationMs:this.revalidator.costMs, revalidationChecks:this.revalidator.checks, revalidationQueries:this.revalidator.queries, memoryEvidence:this.blocked?this.blockEvidence:null, enabled: this.enabled, phase: this.phase(), used: this.used, sampled: this.sampled,
       occupied: this.map.occupiedCount, cells: this.map.cells.size, freeCells: this.map.free.size,
       hz: this.hz, reconstructionMs: this.reconstructionMs, queryMs: this.queryMs,
       coverage: this.coverage, direction: this.direction, blocked: this.blocked,
@@ -444,6 +472,7 @@ export class ARCollisions {
     if(readout&&this.enabled&&diagnosticOpen){const m=this.map.stats(time);readout.textContent+='\nMemória: '+m.candidates+' candidatas; '+m.confirmed+' confirmadas totais; '+m.consolidated+' consolidadas; '+m.awaiting+' aguardando revalidação\nIdade máxima: '+(m.oldestAgeMs===null?'indisponível':(m.oldestAgeMs/1000).toFixed(1)+' s')+'\nRevalidadas / liberadas / expiradas: '+[m.revalidated,m.released,m.expired].join(' / ')+'\nOclusas preservadas: '+m.occluded+'; observações oclusas: '+m.occlusionObservations+'\nSaturação / descartes / recusas: '+[m.saturated,m.evicted,m.rejected].join(' / ')+'\nRevalidação: '+(this.revalidator.costMs===null?'indisponível':this.revalidator.costMs.toFixed(2)+' ms')+'; consultas '+this.revalidator.queries+'\nManutenção: '+(m.maintenanceMs===null?'indisponível':m.maintenanceMs.toFixed(2)+' ms')+'\nMapeamento guiado: '+(this.guided?'ativo':'desativado')+'\nBloqueio temporal: '+(this.blocked?this.blockEvidence:'sem bloqueio atual');}
     if(readout&&this.enabled&&diagnosticOpen)readout.textContent+='\nVolume: '+(this.volume.poseMode||'legacy')+'; yaw '+this.poseYaw.toFixed(3)+'; '+(this.posePending?'orientação aguardando espaço':'pose ativa')+'\nAtualização do volume: '+(this.volumeUpdateMs==null?'—':this.volumeUpdateMs.toFixed(3)+' ms')+'\nPosicionamento: '+this.placementState+'\nEtapa rejeitada: '+(this.lastBlockAvailable?this.lastBlock.failureStage||'—':'—')+'; fonte da consulta: '+(this.lastBlockAvailable?this.lastBlock.failureSource||'—':'—');
     if(readout&&this.enabled&&diagnosticOpen)readout.textContent+='\nOrientação pretendida / adotada: '+this.poseDesiredYaw.toFixed(3)+' / '+this.poseYaw.toFixed(3)+'; rejeição: '+(this.poseRejection||'—')+'; consecutivas: '+this.poseRejects+'\nTranslação rejeitada: '+(this.translationRejection||'—')+'; consecutivas: '+this.translationRejects+'\nSolicitado / permitido X,Z (m): '+[this.requestedDx,this.requestedDz,this.allowedDx,this.allowedDz].map(v=>v.toFixed(4)).join(' / ')+'; sobreposição inicial: '+this.initialOverlap;
+    if(readout&&this.enabled&&diagnosticOpen){const g=this.ground.snapshot(),d=this.directionCoverage();readout.textContent+='\nChão (observação atual): '+g.confidence+'; idade '+(g.ageMs==null?'—':g.ageMs.toFixed(0)+' ms')+'\nDiferença reconstrução / apoio: '+(g.observedSupportDelta==null?'—':g.observedSupportDelta.toFixed(3)+' m')+'\nPontos da grade/local (última reconstrução): chão '+g.floorPoints+'; obstáculo '+g.obstaclePoints+'; incertos '+g.uncertainPoints+'\nClassificação: '+(g.classificationMs==null?'—':g.classificationMs.toFixed(2)+' ms')+'; cobertura adiante '+(d==null?'sem intenção':Math.round(d*100)+'%')+'\nSobreposição: medida no início do último movimento; contato: posição final; rejeição: última subconsulta.';}
     this.diagnosticMs=Math.max(0,this.now()-diagnosticStarted);
     if (!canvas) return;
     canvas.hidden = !this.enabled || !this.visual || !diagnosticOpen;
@@ -494,6 +523,7 @@ export class ARCollisions {
     this.poseRejection=this.translationRejection=null;this.poseRejects=this.translationRejects=0;this.requestedDx=this.requestedDz=this.allowedDx=this.allowedDz=0;this.initialOverlap=false;
     this.contact=null;this.lastRender=-Infinity;if(this.elements.status){this.elements.status.hidden=true;this.elements.status.textContent='';}
     this.lastMapClearReason=reason;this.mapGeneration=(this.mapGeneration||0)+1;
+    this.localQueries=this.localAccepted=0;this.localPoints.fill(0);this.localIds.fill(-1);
     this.acquisitionMs=this.nativeReadMs=this.readerMs=this.projectionMs=this.gridReadMs=this.pointReconstructionMs=this.mapUpdateMs=this.contactGeometryMs=this.freeRayMs=null;this.freeRayCount=0;this.adaptiveReason=null;this.lastReduction=null;this.rayTags.fill(0);this.rayStamp=this.rayCursor=0;
     this.revalidator.clear();this.guided=false;this.guidedBaseline=0;
     if(this.elements.mappingButton){this.elements.mappingButton.disabled=true;this.elements.mappingButton.textContent='Mapear ambiente';this.elements.mappingButton.setAttribute('aria-pressed','false');}

@@ -37,7 +37,7 @@ if not base_url:
  base_url=f'http://127.0.0.1:{server.server_port}/ar-play/'
 base_url=base_url.rstrip('/')+'/'
 try:
- resources={'':'text/html','index.html':'text/html','style.css':'text/css','manifest.webmanifest':'application/manifest+json','sw.js':'javascript','src/boot.js':'javascript','src/build.js':'javascript','src/pwa.js':'javascript','src/app.js':'javascript','src/depth.js':'javascript','src/spatial-map.js':'javascript','src/collision.js':'javascript','src/movement-probe.js':'javascript','src/volume.js':'javascript','src/spatial-debug.js':'javascript','src/revalidation.js':'javascript','src/diagnostics.js':'javascript','src/math.js':'javascript','src/engine.js':'javascript','icons/icon-192.png':'image/png','icons/icon-512.png':'image/png'}
+ resources={'':'text/html','index.html':'text/html','style.css':'text/css','manifest.webmanifest':'application/manifest+json','sw.js':'javascript','src/boot.js':'javascript','src/build.js':'javascript','src/pwa.js':'javascript','src/app.js':'javascript','src/ground.js':'javascript','src/depth.js':'javascript','src/spatial-map.js':'javascript','src/collision.js':'javascript','src/movement-probe.js':'javascript','src/volume.js':'javascript','src/spatial-debug.js':'javascript','src/revalidation.js':'javascript','src/diagnostics.js':'javascript','src/math.js':'javascript','src/engine.js':'javascript','icons/icon-192.png':'image/png','icons/icon-512.png':'image/png'}
  for name,mime in resources.items():
   with urlopen(base_url+name,timeout=30) as response:
    assert response.status==200,(name,response.status)
@@ -89,7 +89,7 @@ try:
   build=page.evaluate('window.__arplay.build()');cache=build['cache'];assert build['version']==version and build['revision'];assert page.locator('#appVersion').inner_text()=='v'+version
   assert re.fullmatch(r'ar-play-v'+re.escape(version)+r'(-r[1-9][0-9]*)?',cache),cache
   assert page.evaluate('caches.keys()')==[cache]
-  assert page.evaluate('(async () => (await (await caches.open("'+cache+'")).keys()).length)()')==20
+  assert page.evaluate('(async () => (await (await caches.open("'+cache+'")).keys()).length)()')==21
   print('PASS service worker scope and versioned cache')
   context.set_offline(True);page.reload();page.wait_for_function('window.__arplay?.state().frameCount > 2');print('PASS offline reload')
   for char in ['nori','luma','bip']:
@@ -311,7 +311,7 @@ try:
   recovery.wait_for_function('window.__arplay.spatial().blocked',timeout=15000);recovery.keyboard.up('ArrowUp')
   recovery.locator('#demo').click();recovery.wait_for_function("window.__arplay.state().mode === 'demo'")
   assert recovery.evaluate('window.__arplay.spatial().cells')==0
-  saved=recovery.evaluate('window.__arplay.archive()');assert any(e['kind']=='suspended' for e in saved['state']['lifecycle']);assert any(e['kind']=='resumed' for e in saved['state']['lifecycle']);assert saved['lastBlock'] and saved['version']=='1.1.8'
+  saved=recovery.evaluate('window.__arplay.archive()');assert any(e['kind']=='suspended' for e in saved['state']['lifecycle']);assert any(e['kind']=='resumed' for e in saved['state']['lifecycle']);assert saved['lastBlock'] and saved['version']=='1.1.9'
   assert 0<len(saved['state']['blockedCells'])<=8;assert all('freeEvidence' in c and 'reason' in c and 'key' not in c for c in saved['state']['blockedCells']);assert saved['reason']=='mode-change';assert 'previousX' not in saved['lastBlock'];assert saved['session']=='AR-1'
   recovery.locator('#lastDiagnostic').click();assert recovery.locator('#archiveText').inner_text()
   recovery.evaluate("Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async()=>{throw new Error('simulated permission denial')}}})")

@@ -50,7 +50,7 @@ export class SpatialDebug {
     for(let i=0;i<s.used*3 && i<s.points.length;i+=3){
       const x=s.points[i],y=s.points[i+1],z=s.points[i+2];
       const h=(x-o[0])*n[0]+(y-o[1])*n[1]+(z-o[2])*n[2];
-      if(Math.abs(h)<=c.floorTolerance){this.vertex(x,y,z);this.groundCount++;}
+      if(s.ground&&Number.isFinite(s.ground.time)?s.ground.labels[i/3]===1:Math.abs(h)<=c.floorTolerance){this.vertex(x,y,z);this.groundCount++;}
     }
     this.end();this.begin(1);
     for(let i=0;i<s.used*3 && i<s.points.length;i+=3){
@@ -105,7 +105,7 @@ export class SpatialDebug {
     // the character's obstacle band. Show them separately so rejection is diagnosable.
     for(let i=0;i<s.used*3&&i<s.points.length;i+=3){
       const x=s.points[i],y=s.points[i+1],z=s.points[i+2],height=(x-o[0])*n[0]+(y-o[1])*n[1]+(z-o[2])*n[2];
-      if(Math.abs(height)>c.floorTolerance&&!m.inRegion(x,y,z)){this.vertex(x,y,z);this.outsideCount++;}
+      if((s.ground&&Number.isFinite(s.ground.time)?s.ground.labels[i/3]!==1:Math.abs(height)>c.floorTolerance)&&!m.inRegion(x,y,z)){this.vertex(x,y,z);this.outsideCount++;}
     }
     this.end();
     for(let index=9;index<=10;index++){

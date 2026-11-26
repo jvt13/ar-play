@@ -1,0 +1,201 @@
+{
+  "sourceCommit": "8e3faad970e25e5dec30571e16541a7e5e6e7ae1",
+  "excludes": "occupied/probe counts: mapping density may improve; positions, rejection and releases remain exact",
+  "results": [
+    {
+      "scenario": "floor",
+      "scale": 0.4,
+      "motionSha256": "08f6d5d4e4dfaff9dfaadd4dcc75bf71e0291a54e75864536b066fda5b5ee32f"
+    },
+    {
+      "scenario": "map-after-placement",
+      "scale": 0.4,
+      "motionSha256": "a486301286b7434c1e8493f4d71e238a74d6bc5e58ee75186c1165fde97f067b"
+    },
+    {
+      "scenario": "enable-after-motion",
+      "scale": 0.4,
+      "motionSha256": "fbff3f95334be212a2c259b72135b6bb764fbb10cb2e6848e4864ed6927178a6"
+    },
+    {
+      "scenario": "reposition",
+      "scale": 0.4,
+      "motionSha256": "c60fbdbf9151083995f57ce9ecb90b84e7f5454264c25080d772c21384873345"
+    },
+    {
+      "scenario": "resize",
+      "scale": 0.4,
+      "motionSha256": "0dde0ba896b85cb51bdf1febfdd15280e08476e5d103bc45534148a31e5115d7"
+    },
+    {
+      "scenario": "noisy-floor",
+      "scale": 0.4,
+      "motionSha256": "08f6d5d4e4dfaff9dfaadd4dcc75bf71e0291a54e75864536b066fda5b5ee32f"
+    },
+    {
+      "scenario": "pitched-camera",
+      "scale": 0.4,
+      "motionSha256": "08f6d5d4e4dfaff9dfaadd4dcc75bf71e0291a54e75864536b066fda5b5ee32f"
+    },
+    {
+      "scenario": "raised-floor",
+      "scale": 0.4,
+      "motionSha256": "4ea676e1879ce1033a0f28e5db673e1ff653940d83e18a002dca4c93bfa573af"
+    },
+    {
+      "scenario": "initial-overlap",
+      "scale": 0.4,
+      "motionSha256": "c0a337ef8279ab11ee12c377c80117f284ef4757e33545eee5ff8f1506df583f"
+    },
+    {
+      "scenario": "concurrent",
+      "scale": 0.4,
+      "motionSha256": "c0a337ef8279ab11ee12c377c80117f284ef4757e33545eee5ff8f1506df583f"
+    },
+    {
+      "scenario": "small",
+      "scale": 0.4,
+      "motionSha256": "a88f1588614e10dd252a3c24cd644c22f3a28ab292d5092db32270186db9caaa"
+    },
+    {
+      "scenario": "large",
+      "scale": 0.4,
+      "motionSha256": "fe768ad1b759a9782a80fd775a590841c4e1771d8c2ad4904421f5969091d445"
+    },
+    {
+      "scenario": "historical",
+      "scale": 0.4,
+      "motionSha256": "fe768ad1b759a9782a80fd775a590841c4e1771d8c2ad4904421f5969091d445"
+    },
+    {
+      "scenario": "floor",
+      "scale": 0.81,
+      "motionSha256": "08f6d5d4e4dfaff9dfaadd4dcc75bf71e0291a54e75864536b066fda5b5ee32f"
+    },
+    {
+      "scenario": "map-after-placement",
+      "scale": 0.81,
+      "motionSha256": "c777b0412e3337840b57b279745187125179de94eb3449db60ff1edad4bb392f"
+    },
+    {
+      "scenario": "enable-after-motion",
+      "scale": 0.81,
+      "motionSha256": "9d5f8680dc167e4b1bbc11d96fdd95a8d7468ee88f4cd28c168acf95c08f6608"
+    },
+    {
+      "scenario": "reposition",
+      "scale": 0.81,
+      "motionSha256": "475e95683ad0b052ad5a9c2314703c4312ccecb765d944e6b9aa95a92055b168"
+    },
+    {
+      "scenario": "resize",
+      "scale": 0.81,
+      "motionSha256": "9c1498f6959946d699bde82d949ada3f436bb046d0518b0e083227c3a7f6d09a"
+    },
+    {
+      "scenario": "noisy-floor",
+      "scale": 0.81,
+      "motionSha256": "08f6d5d4e4dfaff9dfaadd4dcc75bf71e0291a54e75864536b066fda5b5ee32f"
+    },
+    {
+      "scenario": "pitched-camera",
+      "scale": 0.81,
+      "motionSha256": "08f6d5d4e4dfaff9dfaadd4dcc75bf71e0291a54e75864536b066fda5b5ee32f"
+    },
+    {
+      "scenario": "raised-floor",
+      "scale": 0.81,
+      "motionSha256": "4ea676e1879ce1033a0f28e5db673e1ff653940d83e18a002dca4c93bfa573af"
+    },
+    {
+      "scenario": "initial-overlap",
+      "scale": 0.81,
+      "motionSha256": "d6d40233d2c972248e5816cd1e79582408500f0c3f2771faf5a46426ed42e285"
+    },
+    {
+      "scenario": "concurrent",
+      "scale": 0.81,
+      "motionSha256": "d6d40233d2c972248e5816cd1e79582408500f0c3f2771faf5a46426ed42e285"
+    },
+    {
+      "scenario": "small",
+      "scale": 0.81,
+      "motionSha256": "eb8c286e313b37ea50fe011d93950ecad195f57949842ddd0a2ed69a8f878131"
+    },
+    {
+      "scenario": "large",
+      "scale": 0.81,
+      "motionSha256": "03b37b6f088156e895d0de9adcf3607b1e3bcb3b00aed2e83b69ee42f81e90c2"
+    },
+    {
+      "scenario": "historical",
+      "scale": 0.81,
+      "motionSha256": "03b37b6f088156e895d0de9adcf3607b1e3bcb3b00aed2e83b69ee42f81e90c2"
+    },
+    {
+      "scenario": "floor",
+      "scale": 1,
+      "motionSha256": "08f6d5d4e4dfaff9dfaadd4dcc75bf71e0291a54e75864536b066fda5b5ee32f"
+    },
+    {
+      "scenario": "map-after-placement",
+      "scale": 1,
+      "motionSha256": "4bc2ce00e687ef808da2f62aa8d2112dfa15853bf77de0f9a1483dcecd0948ac"
+    },
+    {
+      "scenario": "enable-after-motion",
+      "scale": 1,
+      "motionSha256": "fbff3f95334be212a2c259b72135b6bb764fbb10cb2e6848e4864ed6927178a6"
+    },
+    {
+      "scenario": "reposition",
+      "scale": 1,
+      "motionSha256": "fea0da0e5be529ea9553c558ea6a2472b9bd15f0e7b9322a283978e22f87f00f"
+    },
+    {
+      "scenario": "resize",
+      "scale": 1,
+      "motionSha256": "5e8b972aff14c11394c812c664be6deb3735204f6e7e7b91085c69c3264de36d"
+    },
+    {
+      "scenario": "noisy-floor",
+      "scale": 1,
+      "motionSha256": "08f6d5d4e4dfaff9dfaadd4dcc75bf71e0291a54e75864536b066fda5b5ee32f"
+    },
+    {
+      "scenario": "pitched-camera",
+      "scale": 1,
+      "motionSha256": "08f6d5d4e4dfaff9dfaadd4dcc75bf71e0291a54e75864536b066fda5b5ee32f"
+    },
+    {
+      "scenario": "raised-floor",
+      "scale": 1,
+      "motionSha256": "4ea676e1879ce1033a0f28e5db673e1ff653940d83e18a002dca4c93bfa573af"
+    },
+    {
+      "scenario": "initial-overlap",
+      "scale": 1,
+      "motionSha256": "c2dbbc44bcc3352cbeba0bc1c5e506676445d5fbfb295b055c2e652489022aec"
+    },
+    {
+      "scenario": "concurrent",
+      "scale": 1,
+      "motionSha256": "58795d73ee0ba32302bcc08b4078fb410faecfd9f9ec2dad82c892845eb86ba4"
+    },
+    {
+      "scenario": "small",
+      "scale": 1,
+      "motionSha256": "b60d070375473a02e2f14e6412f1311aded76b0c0a9da5802c692b894a3287bd"
+    },
+    {
+      "scenario": "large",
+      "scale": 1,
+      "motionSha256": "5e8b972aff14c11394c812c664be6deb3735204f6e7e7b91085c69c3264de36d"
+    },
+    {
+      "scenario": "historical",
+      "scale": 1,
+      "motionSha256": "5e8b972aff14c11394c812c664be6deb3735204f6e7e7b91085c69c3264de36d"
+    }
+  ]
+}

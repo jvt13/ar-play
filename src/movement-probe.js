@@ -119,6 +119,12 @@ export class MovementProbe {
       this.count--;if(i!==this.count)this.history.copyWithin(j,this.count*7,this.count*7+7);this.history.fill(0,this.count*7,this.count*7+7);
     }
   }
+  discardGround(ground){
+    for(let i=this.count-1;i>=0;i--){const j=i*7,h=this.history,x=h[j],y=h[j+1],z=h[j+2],dx=h[j+4]*h[j+6],dz=h[j+5]*h[j+6];
+      if(!ground.isFloor(x,y,z)||!ground.isFloor(x-dx,y,z-dz)||!ground.isFloor(x+dx,y,z+dz))continue;
+      this.count--;if(i!==this.count)h.copyWithin(j,this.count*7,this.count*7+7);h.fill(0,this.count*7,this.count*7+7);
+    }
+  }
   contactAt(x,z,volume,time,skin){
     let best=Infinity,found=false;
     for(let i=0;i<this.count;i++){

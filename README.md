@@ -1,4 +1,4 @@
-# AR Play — v1.1.8 (MVP)
+# AR Play — v1.1.9 (MVP)
 
 Aplicativo web de personagens 3D interativos, inspirado na experiência de câmera com efeitos de realidade aumentada. Não é uma reprodução do TikTok. Os três personagens (Bip, Nori e Luma) são construídos proceduralmente, sem baixar modelos ou usar ativos proprietários.
 
@@ -41,7 +41,7 @@ A câmera, renderização e gravação são processadas localmente. O app não e
 
 ## Testes
 
-`npm test`: 242 testes registrados (234 aprovados e 8 expectativas físicas históricas aposentadas com justificativa), incluindo reconstrução 3D, projeções assimétricas, chão, confirmação/expiração, cobertura desconhecida, paredes/móveis, posições efetivas, recuo, deslizamento, escala e limpeza. A correção 1.1.1 acrescenta bloqueio imediato com mapa parcial, persistência lateral, liberação confiável, limites geométricos do contato e saída de sobreposição. A expiração de ocupação descarta votos livres fracos anteriores e retorna a desconhecido. O cache atual é `ar-play-v1.1.8-r1`. `npm run check` valida a sintaxe JavaScript. Geometria e sessões automatizadas são sintéticas; a suíte de navegador também verifica a integração XR simulada, a sonda com diagnóstico fechado e a preservação dos modos existentes.
+`npm test`: 394 testes registrados (386 aprovados e 8 expectativas físicas históricas aposentadas com justificativa), incluindo reconstrução 3D, projeções assimétricas, chão, confirmação/expiração, cobertura desconhecida, paredes/móveis, posições efetivas, recuo, deslizamento, escala e limpeza. A correção 1.1.1 acrescenta bloqueio imediato com mapa parcial, persistência lateral, liberação confiável, limites geométricos do contato e saída de sobreposição. A expiração de ocupação descarta votos livres fracos anteriores e retorna a desconhecido. O cache atual é `ar-play-v1.1.9-r1`. `npm run check` valida a sintaxe JavaScript. Geometria e sessões automatizadas são sintéticas; a suíte de navegador também verifica a integração XR simulada, a sonda com diagnóstico fechado e a preservação dos modos existentes.
 
 Benchmark CPU opcional: `node tests/spatial_benchmark.mjs`. Usa geometria sintética, informa ambiente, mediana, p95 e máximos; não mede sensor, câmera ou desempenho no celular.
 
@@ -49,7 +49,25 @@ Suíte de navegador: instale Python 3.12+, Playwright (`python -m pip install pl
 
 Câmera física, sensores, instalação no Android e ARCore exigem validação no aparelho. Os testes de navegador usam câmera simulada e não homologam WebXR/ARCore.
 
-## Recuperação da cadeia física — 1.1.8 (ARP-004I)
+## Mapeamento espacial — 1.1.9 (ARP-004J)
+
+A referência funcional é a 1.1.8, parcialmente homologada no aparelho. A candidata mantém os 12 cilindros circulares, o resolvedor, personagens, margens de 2,5/1,5 cm, voxels de 12 cm e memória consolidada de até 45 s. Estúdio e Câmera permanecem iguais, com a identificação compartilhada `v1.1.9`, revisão `arp004j-20261126-r1` e cache `ar-play-v1.1.9-r1`.
+
+A classificação adicional de chão exige conexão com o apoio selecionado, sementes próximas, extensão em dois eixos, maioria de pontos compatíveis e três aquisições independentes. Usa os pontos já reconstruídos, com 8624 bytes fixos reutilizados. Um piso inclinado conectado ao apoio que alcança +9 cm deixou de produzir bloqueios falsos na fixture: Bip 81%, 400 atualizações, deslocamento 1,0544 → 1,88 m e rejeições 166 → 0. Não basta encontrar uma superfície horizontal elevada. Um plano uniforme +9 cm sem evidência junto ao apoio continua incerto e conservadoramente bloqueante: esses dados também poderiam representar um objeto baixo.
+
+Para objetos finos, até 12 leituras locais extras por reconstrução procuram vizinhos de um retorno realmente medido acima do chão. Três pixels distintos próximos e as confirmações temporais existentes continuam obrigatórios. A grade global, a frequência e os buffers de 432 pontos não aumentam. Auxiliares fixos: mais 140 bytes. Bola, chinelo, brinquedo, pés e degrau são testados nos três personagens e em 40%, 81% e 100%, inclusive acima do piso corrigido. Um único pixel ruidoso não confirma obstáculo.
+
+O chão corrigido só libera ocupações anteriores quando há evidências atuais compatíveis e os votos/hold originais. Objetos ocultos, dados ausentes e cobertura baixa conservam proteção. A fixture da cama combina vista parcial, outro ângulo, retorno, 10 s fora da vista, objeto ainda presente e remoção: as células consolidadas persistem e as observações válidas liberam o objeto retirado antes da expiração. Vistas rasantes podem não fornecer dados suficientes; observar por outro ângulo continua necessário.
+
+O diagnóstico local recuperável separa a classificação/idade da última aquisição, a sobreposição no início do movimento, o contato na posição final e a última subconsulta rejeitada. Inclui confiança do apoio, diferença reconstruída, contagens de chão/obstáculo/incerto, origem/altura/idade das células e cobertura na direção pretendida. A geometria diagnóstica permanece desligada por padrão e possui legenda.
+
+Um ensaio de estreitamento de contato diagonal foi rejeitado por prejudicar o deslizamento. As margens e a geometria estável da 1.1.8 permanecem. O círculo que contém animações pode parar antes do corpo em repouso; o relatório de contato decompõe essa diferença e a contribuição da representação medida. Não se promete distância física garantida nem melhoria de FPS Android.
+
+As 39 sequências históricas preservam exatamente as 400 posições, rejeições e liberações da referência. O golden completo original permanece em `tests/fixtures/chain-v115.json`; o golden adicional `chain-v118-motion.json` foi extraído da 1.1.8, conferido contra os hashes anteriores e exclui somente contagens internas da representação espacial. Os oito testes históricos experimentais continuam isolados e justificados. Comparação/benchmark reproduzíveis: extraia `src/` da 1.1.8 em um diretório com `package.json` de ES Modules e execute `node tests/mapping-compare.mjs <snapshot>` e `node tests/mapping_benchmark.mjs <snapshot>`.
+
+A PWA mantém ativação explícita, sem recarregar sessão AR ativa. Migrações reais de workers/caches 1.1.5, 1.1.6, 1.1.7 e 1.1.8 são testadas, incluindo a revisão seguinte aguardando durante XR e execução offline. **Homologação física da 1.1.9 pendente.** Após sair do AR, use Atualizar aplicativo, confirme versão/revisão/cache na Ajuda, posicione Bip 81% em chão livre e observe o piso e os obstáculos por dois ângulos. Teste avanço, giro, recuo, lateral, diagonal, objetos pequenos e retirada de objeto. Repita 40%/100%, reposicione e alterne colisões. Se houver bloqueio ou contato excessivo, exporte o JSON antes de recarregar e registre o obstáculo, tamanho e ângulo da câmera; não use regiões desconhecidas como prova de espaço livre.
+
+## Recuperação da cadeia física — 1.1.8 (ARP-004I, histórico)
 
 A cadeia física volta à referência funcional `14e6ca2` da 1.1.5. Mapa espacial, projeção/classificação, sonda, revalidação e volume circular de 12 faixas usam as implementações da referência. O resolvedor usa os mesmos passos, projeções de eixo e regras de saída, com captura adicional somente de escalares diagnósticos. Foram retirados o avanço parcial posterior e consultas automáticas extras de posicionamento. Margens de 2,5/1,5 cm, chão de 6 cm, voxels de 12 cm, memória de 45 s e sonda de 900 ms permanecem.
 

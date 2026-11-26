@@ -4,9 +4,13 @@ import * as collision from '../src/collision.js';import * as depth from '../src/
 import {runChain} from './chain-fixtures.mjs';
 const API={...collision,...depth,...math};
 const reference=JSON.parse(readFileSync(new URL('./fixtures/chain-v115.json',import.meta.url),'utf8'));
+const motionReference=JSON.parse(readFileSync(new URL('./fixtures/chain-v118-motion.json',import.meta.url),'utf8'));
 for(const expected of reference.results)test(`ARP-004I full controller ${expected.scenario} scale ${expected.scale}`,()=>{
   const actual=runChain(API,expected);
-  assert.equal(createHash('sha256').update(JSON.stringify(actual.trace)).digest('hex'),expected.traceSha256,'all 400 acquisition/movement states must match 1.1.5');
+  // ARP-004J intentionally adds supported samples/cells. Keep the original full golden
+  // untouched; compare every physical position, rejection and release to frozen 1.1.8.
+  const golden=motionReference.results.find(r=>r.scenario===expected.scenario&&r.scale===expected.scale);
+  assert.equal(createHash('sha256').update(JSON.stringify(actual.trace.map(r=>[r[0],r[1],r[4],r[5]]))).digest('hex'),golden.motionSha256,'all 400 physical states must match the functional reference');
   assert.ok(Math.abs(actual.distance-expected.distance)<1e-9);
   if(['floor','noisy-floor','pitched-camera'].includes(actual.scenario)){assert.equal(actual.maxOccupied,0);assert.ok(actual.distance>1.999);}
 });

@@ -1,6 +1,6 @@
 import {BUILD} from './src/build.js';
 const CACHE=BUILD.cache;
-const FILES=['./','./index.html','./style.css','./src/boot.js','./src/build.js','./src/pwa.js','./src/app.js','./src/depth.js','./src/spatial-map.js','./src/collision.js','./src/volume.js','./src/diagnostics.js','./src/revalidation.js','./src/spatial-debug.js','./src/movement-probe.js','./src/math.js','./src/engine.js','./manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png'];
+const FILES=['./','./index.html','./style.css','./src/boot.js','./src/build.js','./src/pwa.js','./src/app.js','./src/ground.js','./src/depth.js','./src/spatial-map.js','./src/collision.js','./src/volume.js','./src/diagnostics.js','./src/revalidation.js','./src/spatial-debug.js','./src/movement-probe.js','./src/math.js','./src/engine.js','./manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES))));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('ar-play-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener('message',e=>{

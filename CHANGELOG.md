@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.9 — 2026-11-26
+
+- Chão conectado ao apoio pode ser reconhecido por evidência espacial e temporal, usando a reconstrução existente; planos elevados sem âncora continuam incertos. Corrige falsos bloqueios da fixture inclinada até +9 cm sem ampliar tolerância vertical ou ignorar objetos baixos.
+- Confirmação localizada de retornos esparsos com até 12 leituras adicionais e três pixels nativos distintos. Preserva a grade, frequência adaptativa, buffers limitados, volume circular, resolvedor e margens da 1.1.8.
+- Diagnóstico anônimo recuperável inclui classificação/confiança/idade do chão, diferença do apoio, contagens e origem/altura das ocupações. Visualização com legenda, desativada por padrão.
+- Testes ampliados para objetos pequenos, piso ruidoso/inclinado, cobertura por outros ângulos, retenção e remoção, contato decomposto, controlador real e repetição temporal. Golden físico da referência preserva todas as posições/rejeições/liberações; o golden completo anterior permanece arquivado.
+- Estreitamento experimental de contato rejeitado por regressão de deslizamento; nenhuma redução de margem ou mudança de personagem. Não há promessa de precisão física ou FPS Android.
+- Revisão `arp004j-20261126-r1`, cache `ar-play-v1.1.9-r1`; atualização PWA explícita preservada e migração desde 1.1.8 acrescentada. Homologação física pendente.
+
 ## 1.1.8 — 2026-11-26
 
 - ARP-004I: restaura mapa, sonda, volume, revalidação e decisões do resolvedor da cadeia funcional 1.1.5, removendo avanço parcial posterior, consultas extras de pose/posicionamento e integração orientada. Sem ajustes especulativos de margens, chão ou retenção.

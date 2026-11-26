@@ -85,6 +85,7 @@ export class SpatialMap {
     this.expiredCount=this.releasedCount=this.evictedCount=this.rejectedCount=this.occludedCount=this.revalidatedCount=0;
     this.createdCount=0;this.evictionChecks=0;this.releaseCursor=this.releaseCount=0;this.released.fill(0);this.maintenanceMs=null;
     this.statsAt=-Infinity;this.statsCache=null;this.camera=null;
+    this.ground?.clear();
   }
   key(ix, iy, iz) {
     if (ix < -32768 || ix > 32767 || iz < -32768 || iz > 32767 || iy < -128 || iy > 127) return -1;
@@ -164,23 +165,30 @@ export class SpatialMap {
   inRegion(x, y, z) {
     return this.ready && (x - this.centerX) ** 2 + (z - this.centerZ) ** 2 <= this.config.radius ** 2 &&
       y > this.origin[1] && y <= this.origin[1] + this.height &&
-      (x - this.origin[0]) * this.normal[0] + (y - this.origin[1]) * this.normal[1] + (z - this.origin[2]) * this.normal[2] > this.config.floorTolerance;
+      (x - this.origin[0]) * this.normal[0] + (y - this.origin[1]) * this.normal[1] + (z - this.origin[2]) * this.normal[2] > this.config.floorTolerance && !this.ground?.isMeasuredFloor(x,y,z);
   }
-  observe(x, y, z, retained = false) {
+  observeGround(x,y,z){
+    if(!this.ground?.isFloor(x,y,z))return;
+    const s=this.config.cellSize,o=this.origin,ix=Math.floor((x-o[0])/s),iy=Math.floor((y-o[1])/s),iz=Math.floor((z-o[2])/s),cell=this.cells.get(this.key(ix,iy,iz));
+    if(cell&&this.ground.boundsAreFloor(cell)){cell.revalidationReason='current anchored ground observations';this.markFree(ix,iy,iz,'targeted');}
+  }
+  observe(x, y, z, retained = false, source='surface-depth') {
     if (!Number.isFinite(x + y + z)) return false;
     const s = this.config.cellSize, o = this.origin;
     const ix = Math.floor((x - o[0]) / s), iy = Math.floor((y - o[1]) / s), iz = Math.floor((z - o[2]) / s), key = this.key(ix, iy, iz);
     if (key < 0) return false;
     let cell = this.cells.get(key);
+    if(retained&&cell&&this.ground?.boundsAreFloor(cell)&&this.ground.isMeasuredFloor(x,y,z))return false;
     if(!this.inRegion(x,y,z) && !(retained && cell?.confirmed && this.valid(cell,this.time)))return false;
     if(cell&&!this.valid(cell,this.time)){this.remove(cell,'expired');cell=null;}
     if (!cell) {
       if (!this.makeRoom()) return false;
-      cell = {id:this.createdCount+1,key, ix, iy, iz, firstX:x, firstZ:z, tangentX:0, tangentZ:0, span:0, planar:true, minX: x, maxX: x, minY: y, maxY: y, minZ: z, maxZ: z,
+      cell = {id:this.createdCount+1,key, ix, iy, iz, source, firstX:x, firstZ:z, tangentX:0, tangentZ:0, span:0, planar:true, minX: x, maxX: x, minY: y, maxY: y, minZ: z, maxZ: z,
         recent:new Float64Array(24),geometrySlot:-1,geometryCount:0,geometryDirty:false,refineAxis:-1,contactMin:0,contactMax:0,lastBlocked:-Infinity,
         hits: 0, time: this.time, firstSeen: this.time, lastIndependent:-Infinity, observations:0, consistentUpdates:0, consolidated:false, viewpointSpan:0, cameraX:this.camera?.[12]??null, cameraY:this.camera?.[13]??null, cameraZ:this.camera?.[14]??null, visibility:null, lastCheck:-Infinity, firstFree:0, lastFree:-Infinity, rayHits:0, directHits:0, directFirst:0, directLast:-Infinity, directBatch:-1, batch: -1, confirmed: false, freeHits: 0, freeBatch: -1};
       this.cells.set(key, cell);this.createdCount++;
     }
+    if(cell.source!==source)cell.source='mixed-depth';
     if (cell.batch !== this.batch) {
       if(this.time-cell.time>=this.config.candidateTtl)cell.geometryCount=0;
       cell.geometrySlot=(cell.geometrySlot+1)%3;cell.geometryCount=Math.min(3,cell.geometryCount+1);
@@ -250,7 +258,8 @@ export class SpatialMap {
   }
   blockedDetails(time){
     const out=[];
-    for(let i=0;i<this.blockCellCount;i++){const cell=this.lastBlockCells[i];out.push({id:cell.id,state:this.cells.get(cell.key)===cell?this.memoryState(cell,time):'removed',ageMs:Math.max(0,time-cell.time),freeEvidence:cell.freeHits,reason:cell.removalReason||cell.revalidationReason||cell.visibility||'indisponível',refined:cell.refineAxis>=0});}
+    const o=this.origin,n=this.normal;
+    for(let i=0;i<this.blockCellCount;i++){const cell=this.lastBlockCells[i];out.push({id:cell.id,source:cell.source??'surface-depth',minHeightAboveSupport:((n[0]>=0?cell.minX:cell.maxX)-o[0])*n[0]+((n[1]>=0?cell.minY:cell.maxY)-o[1])*n[1]+((n[2]>=0?cell.minZ:cell.maxZ)-o[2])*n[2],maxHeightAboveSupport:((n[0]>=0?cell.maxX:cell.minX)-o[0])*n[0]+((n[1]>=0?cell.maxY:cell.minY)-o[1])*n[1]+((n[2]>=0?cell.maxZ:cell.minZ)-o[2])*n[2],lastCheckAgeMs:Number.isFinite(cell.lastCheck)?Math.max(0,time-cell.lastCheck):null,state:this.cells.get(cell.key)===cell?this.memoryState(cell,time):'removed',ageMs:Math.max(0,time-cell.time),freeEvidence:cell.freeHits,reason:cell.removalReason||cell.revalidationReason||cell.visibility||'indisponível',refined:cell.refineAxis>=0});}
     return out;
   }
   noteBlocked(x,z,volume,time,skin) {
