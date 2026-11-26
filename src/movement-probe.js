@@ -1,4 +1,4 @@
-import {radiusAt,supportAt,orientedDepth} from './volume.js';
+import {radiusAt} from './volume.js';
 // Bounded, movement-directed depth evidence. Only derived world points survive XRFrame.
 // Evidence strength counts supporting samples; it is NOT a sensor confidence/precision score.
 export function projectWorld(x,y,z,pose,projection,out) {
@@ -123,7 +123,7 @@ export class MovementProbe {
     let best=Infinity,found=false;
     for(let i=0;i<this.count;i++){
       const j=i*7,h=this.history;if(time-h[j+3]>=900||h[j+1]<=volume.ground+this.config.floorTolerance||h[j+1]>=volume.ground+volume.height)continue;
-      const a=Math.max(-h[j+6],Math.min(h[j+6],(x-h[j])*h[j+4]+(z-h[j+2])*h[j+5])),px=h[j]+a*h[j+4],pz=h[j+2]+a*h[j+5],distance=Math.hypot(x-px,z-pz),radius=supportAt(volume,h[j+1],h[j+1],px-x,pz-z),gap=distance-radius;
+      const a=Math.max(-h[j+6],Math.min(h[j+6],(x-h[j])*h[j+4]+(z-h[j+2])*h[j+5])),px=h[j]+a*h[j+4],pz=h[j+2]+a*h[j+5],distance=Math.hypot(x-px,z-pz),radius=radiusAt(volume,h[j+1]),gap=distance-radius;
       if(gap<best&&gap<=skin+this.config.pointMargin+1e-6){best=gap;found=true;this.contactPoint[0]=px;this.contactPoint[1]=h[j+1];this.contactPoint[2]=pz;Object.assign(this.contactSummary,{kind:'sonda',cellId:null,surfaceDistance:distance,volumeRadius:radius,clearance:gap,pointMargin:this.config.pointMargin,skin,ageMs:time-h[j+3],state:'evidência imediata',freeEvidence:0,reason:null,refined:false});}
     }
     if(found)this.lastBlockTime=time;return found?this.contactSummary:null;
@@ -141,14 +141,14 @@ export class MovementProbe {
       if (time - this.history[b + 3] >= 900 || this.history[b + 1] <= volume.ground + this.config.floorTolerance || this.history[b + 1] >= volume.ground + volume.height) continue;
       const dx = x - this.history[b], dz = z - this.history[b + 2];
       const along = Math.max(-this.history[b + 6], Math.min(this.history[b + 6], dx * this.history[b + 4] + dz * this.history[b + 5]));
-      const depth = volume.bodyBounds?orientedDepth(volume,this.history[b+1],this.history[b+1],x,z,this.history[b],this.history[b+2],0,0,skin+this.config.pointMargin,this.history[b+4],this.history[b+5],this.history[b+6]):radiusAt(volume,this.history[b+1])+skin+this.config.pointMargin-Math.hypot(dx-along*this.history[b+4],dz-along*this.history[b+5]);
+      const depth = radiusAt(volume,this.history[b+1]) + skin + this.config.pointMargin - Math.hypot(dx - along * this.history[b + 4], dz - along * this.history[b + 5]);
       if(this.motion && depth>0) {
         const dx0=this.fromX-this.history[b],dz0=this.fromZ-this.history[b+2],tx=this.history[b+4],tz=this.history[b+5],half=this.history[b+6];
-        const padding=skin+this.config.pointMargin;
+        const r0=radiusAt(volume,this.history[b+1])+skin+this.config.pointMargin;
         const a0=Math.max(-half,Math.min(half,dx0*tx+dz0*tz));
-        let before=volume.bodyBounds?orientedDepth(volume,this.history[b+1],this.history[b+1],this.fromX,this.fromZ,this.history[b],this.history[b+2],0,0,padding,tx,tz,half):radiusAt(volume,this.history[b+1])+padding-Math.hypot(dx0-a0*tx,dz0-a0*tz),after=depth;
+        let before=r0-Math.hypot(dx0-a0*tx,dz0-a0*tz),after=depth;
         const fromSide=dx0*tz-dz0*tx,toSide=dx*tz-dz*tx,crossing=half>0&&Math.abs(fromSide)>1e-8&&fromSide*toSide<0;
-        if(!this.escape && half>0){before=supportAt(volume,this.history[b+1],this.history[b+1],-Math.sign(fromSide)*tz,Math.sign(fromSide)*tx)+padding-Math.abs(fromSide);after=supportAt(volume,this.history[b+1],this.history[b+1],-Math.sign(toSide)*tz,Math.sign(toSide)*tx)+padding-Math.abs(toSide);}
+        if(!this.escape && half>0){before=r0-Math.abs(fromSide);after=r0-Math.abs(toSide);}
         const closingPoint=half===0&&(dx0*(x-this.fromX)+dz0*(z-this.fromZ)) < -1e-10;
         if(crossing || closingPoint || (this.escape ? before<=0 : after>Math.max(0,before)+1e-8)){this.motionAllowed=false;this.motionReason=crossing?'crossed-contact-plane':closingPoint?'closing-point-contact':this.escape?'new-contact-during-escape':'contact-worsening';this.motionBefore=before;this.motionAfter=after;this.motionDistance=Math.hypot(dx-along*tx,dz-along*tz);}
       }

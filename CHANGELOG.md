@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.8 — 2026-11-26
+
+- ARP-004I: restaura mapa, sonda, volume, revalidação e decisões do resolvedor da cadeia funcional 1.1.5, removendo avanço parcial posterior, consultas extras de pose/posicionamento e integração orientada. Sem ajustes especulativos de margens, chão ou retenção.
+- Preserva diagnóstico JSON recuperável, lifecycle e limpeza visual como observações independentes; explicita o instante da sobreposição medida.
+- Versão permanente nos três modos. Fonte comum de versão/revisão/cache para bootstrap, runtime, diagnóstico e Service Worker.
+- Atualização explícita, bloqueada em AR/gravação, sem recarga automática por troca externa de controlador. Bootstrap protege contra mistura de módulos de caches antigos.
+- Comparação de 39 sequências completas com 1.1.5/1.1.7, repetição do recuo no controlador real e testes de migração dos três caches anteriores. Oito testes físicos aposentados preservados com motivos explícitos; matemática orientada isolada nos testes históricos.
+- Cache ar-play-v1.1.8-r1, revisão arp004i-20261126-r1. Homologação física pendente; erro de piso/apoio capaz de gerar ocupação indevida permanece hipótese/limitação, inclusive na referência.
+
 ## 1.1.7 — 2026-11-26
 
 - ARP-004H: restaura como padrão os 12 cilindros circulares da 1.1.5; orientação/dança invariáveis adotam o comando sem rejeição espacial do giro. Mesmo resolvedor, proteções, margens e memória.

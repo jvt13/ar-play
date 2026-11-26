@@ -38,7 +38,7 @@ test('ARP-004H circular rotation is invariant even in known overlap, with no spa
   }
 });
 
-test('ARP-004H experimental pose rejection does not gate sustained retreat; equivalent retries are diagnosed', () => {
+test('ARP-004H experimental pose rejection does not gate sustained retreat; equivalent retries are diagnosed', {skip:'ARP-004I: oriented controller integration removed; historical test retained'}, () => {
   const s = setup(API, .81, 'overlap', true);
   assert.equal(s.requestPose(Math.PI, false, 2100), false);
   assert.equal(s.poseRejection, 'occupied-target-volume');

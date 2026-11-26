@@ -1,4 +1,5 @@
-import {PROFILES,configurePose} from './volume.js';
+import {BUILD} from './build.js';
+import {PROFILES} from './volume.js';
 import {clamp} from './math.js';
 import {DepthProjector, SpatialMap} from './spatial-map.js';
 import {MovementProbe} from './movement-probe.js';
@@ -48,7 +49,7 @@ export class CollisionResolver {
   canEnter(map, x, z, volume, time, limit, fromX=x, fromZ=z, escape=false) {
     const depth=map.penetration(x,z,volume,time,this.skin);
     if (escape ? map.allowsMove(fromX,fromZ,x,z,volume,time,this.skin,true) : depth<=limit && (!limit || map.allowsMove(fromX,fromZ,x,z,volume,time,this.skin))) return true;
-    this.failureSource=map.rejectedSource||'field-envelope';this.failureCellId=map.rejectedCellId??null;this.failureStage=this.stage||'sweep';this.failureDx=x-fromX;this.failureDz=z-fromZ;this.failureFromX=fromX;this.failureFromZ=fromZ;this.failureToX=x;this.failureToZ=z;this.failureEscape=escape;
+    this.failureSource=map.rejectedSource||'field-envelope';this.failureStage=this.stage||'sweep';this.failureDx=x-fromX;this.failureDz=z-fromZ;
     if(x!==this.lastNoteX||z!==this.lastNoteZ){map.noteBlocked?.(x,z,volume,time,this.skin);this.lastNoteX=x;this.lastNoteZ=z;}
     this.reason=map.rejectedReason||'contact-worsening';this.before=map.rejectedBefore??limit;this.after=map.rejectedAfter??depth;this.distance=map.rejectedDistance??null;
     this.mapConfirmationTime=Math.max(this.mapConfirmationTime,map.mapContactTime??-Infinity);this.probeConfirmationTime=Math.max(this.probeConfirmationTime,map.probeContactTime??-Infinity);
@@ -57,7 +58,7 @@ export class CollisionResolver {
     return false;
   }
   move(map, position, dx, dz, volume, time) {
-    this.lastNoteX=this.lastNoteZ=NaN;this.mapConfirmationTime=this.probeConfirmationTime=-Infinity;this.evidenceBits=0;this.blockedBits = 0; this.confirmationTime = -Infinity; this.usedPartial=false;this.failureSource=this.failureCellId=this.failureStage=null;this.failureDx=this.failureDz=0;this.reason=''; this.before=this.after=this.distance=null;
+    this.failureSource=this.failureStage=null;this.failureDx=this.failureDz=0;this.usedPartial=false;this.lastNoteX=this.lastNoteZ=NaN;this.mapConfirmationTime=this.probeConfirmationTime=-Infinity;this.evidenceBits=0;this.blockedBits = 0; this.confirmationTime = -Infinity; this.reason=''; this.before=this.after=this.distance=null;
     const out = this.result, startX = position[0], startZ = position[2];
     let x = startX, z = startZ, escape = 0, escapeAttempted = false;
     const wantedX = dx, wantedZ = dz;
@@ -80,23 +81,14 @@ export class CollisionResolver {
       if ((overlap > 0 && escape > 0 && this.canEnter(map,x+sx,z+sz,volume,time,limit,startX,startZ,true)) || allowed) {
         x += sx; z += sz; escape -= Math.hypot(sx, sz); continue;
       }
-      const ax=sx,az=sz,axisStartX=x,axisStartZ=z;
       this.stage='axis-projection';
       // Axis projection permits retreat and tangential sliding; never move without input.
-      if (Math.abs(ax) >= Math.abs(az)) {
-        if (ax && this.canEnter(map, x + ax, z, volume, time, limit, x,z)) x += ax;
-        if (az && this.canEnter(map, x, z + az, volume, time, Math.max(0, map.penetration(x, z, volume, time, this.skin) + (overlap ? 1e-8 : 0)),x,z)) z += az;
+      if (Math.abs(sx) >= Math.abs(sz)) {
+        if (sx && this.canEnter(map, x + sx, z, volume, time, limit, x,z)) x += sx;
+        if (sz && this.canEnter(map, x, z + sz, volume, time, Math.max(0, map.penetration(x, z, volume, time, this.skin) + (overlap ? 1e-8 : 0)),x,z)) z += sz;
       } else {
-        if (az && this.canEnter(map, x, z + az, volume, time, limit,x,z)) z += az;
-        if (ax && this.canEnter(map, x + ax, z, volume, time, Math.max(0, map.penetration(x, z, volume, time, this.skin) + (overlap ? 1e-8 : 0)),x,z)) x += ax;
-      }
-      // A wedge can reject both axes although a finite diagonal portion is free.
-      // Preserve the established tangent projection first: do not step into gaps
-      // between samples if a full lateral component already provides valid sliding.
-      const stepLength=Math.hypot(sx,sz);
-      if(!overlap&&sx&&sz&&x===axisStartX&&z===axisStartZ&&!map.collides(x+sx/stepLength*1e-6,z+sz/stepLength*1e-6,volume,time,this.skin)){
-        let low=0,high=1;for(let k=0;k<16;k++){const f=(low+high)/2;if(map.collides(x+sx*f,z+sz*f,volume,time,this.skin))high=f;else low=f;}
-        x+=sx*low;z+=sz*low;if(low>0)this.usedPartial=true;
+        if (sz && this.canEnter(map, x, z + sz, volume, time, limit,x,z)) z += sz;
+        if (sx && this.canEnter(map, x + sx, z, volume, time, Math.max(0, map.penetration(x, z, volume, time, this.skin) + (overlap ? 1e-8 : 0)),x,z)) x += sx;
       }
     }
     // Finish within one numerical substep of the actual boundary, without shrinking any volume.
@@ -115,14 +107,9 @@ export class CollisionResolver {
     const blockedX = Math.abs(x - startX - wantedX) > 1e-5, blockedZ = Math.abs(z - startZ - wantedZ) > 1e-5;
     out.x = x; out.z = z; out.blocked = blockedX || blockedZ; out.steps = steps;
     out.direction = (blockedX ? (wantedX > 0 ? 'X+' : 'X−') : '') + (blockedX && blockedZ ? '/' : '') + (blockedZ ? (wantedZ > 0 ? 'Z+' : 'Z−') : '');
-    // Describe the final rejected subquery once per movement, rather than doubling
-    // every failed broad/narrow query in continuous joystick pressure.
-    if(out.blocked&&this.failureStage&&!map.allowsMove(this.failureFromX,this.failureFromZ,this.failureToX,this.failureToZ,volume,time,this.skin,this.failureEscape)){
-      this.failureSource=map.rejectedSource||'map';this.failureCellId=map.rejectedCellId??map.motionCellId??null;
-      this.reason=map.rejectedReason??map.motionReason??this.reason;this.before=map.rejectedBefore??map.motionBefore??this.before;this.after=map.rejectedAfter??map.motionAfter??this.after;this.distance=map.rejectedDistance??map.motionDistance??this.distance;
-    }
+    out.usedPartial=false;out.failureSource=this.failureSource;out.failureStage=this.failureStage;out.failureDx=this.failureDx;out.failureDz=this.failureDz;
     out.coverage = map.coverage(x, z, volume, time);
-    out.usedPartial=this.usedPartial;out.failureSource=this.failureSource;out.failureCellId=this.failureCellId;out.failureStage=this.failureStage;out.failureDx=this.failureDx;out.failureDz=this.failureDz;out.reason=out.blocked?(this.reason||'movement-budget'):null;out.distance=this.distance;out.before=this.before;out.after=this.after;out.mapConfirmationTime=this.mapConfirmationTime;out.probeConfirmationTime=this.probeConfirmationTime;out.evidenceBits=this.evidenceBits;out.sourceBits = this.blockedBits; out.confirmationTime = this.confirmationTime;
+    out.reason=out.blocked?(this.reason||'movement-budget'):null;out.distance=this.distance;out.before=this.before;out.after=this.after;out.mapConfirmationTime=this.mapConfirmationTime;out.probeConfirmationTime=this.probeConfirmationTime;out.evidenceBits=this.evidenceBits;out.sourceBits = this.blockedBits; out.confirmationTime = this.confirmationTime;
     return out;
   }
 }
@@ -135,7 +122,7 @@ const STATES = {
 export class ARCollisions {
   constructor(elements = {}, config = {}, now = () => performance.now()) {
     this.elements = elements; this.now = now;this.archive=elements.archive||new DiagnosticArchive(now);this.sessionId=null;this.sessionOrigin=0;
-    const {orientedVolume=false,...mapConfig}=config;this.orientedEnabled=!!orientedVolume;this.poseYaw=0;this.poseDance=false;this.posePending=false;this.poseDesiredYaw=0;this.poseAttemptAt=-Infinity;this.volumeUpdateMs=null;
+    const {orientedVolume=false,...mapConfig}=config;this.orientedEnabled=false;this.poseYaw=0;this.poseDance=false;this.posePending=false;this.poseDesiredYaw=0;this.poseAttemptAt=-Infinity;this.volumeUpdateMs=null;
     this.lifeEvents=Array.from({length:16},()=>({}));this.lifeCount=this.lifeCursor=0;
     this.map = new SpatialMap(mapConfig); this.projector = new DepthProjector(); this.resolver = new CollisionResolver();
     this.probe = new MovementProbe(this.map.config);
@@ -167,7 +154,7 @@ export class ARCollisions {
     this.rayTags=new Uint32Array(432);this.rayStamp=0;this.rayCursor=0;this.depths = new Float32Array(432); this.points = new Float32Array(432 * 3);
     this.point = new Float64Array(3); this.position = new Float64Array(3); this.anchor = new Float64Array(3);
     this.normal = new Float64Array(3);
-    this.candidateVolume=characterVolume('bip',1,0);this.volume = characterVolume('bip', 1, 0); this.result = {x: 0, z: 0};
+    this.volume = characterVolume('bip', 1, 0); this.result = {x: 0, z: 0};
     this.stop();
     if(elements.copyButton)elements.copyButton.onclick=async()=>{const result=await this.archive.copy(this.exportText('manual-copy'));elements.copyButton.textContent=result.ok?'Copiado':'Falha na cópia';if(elements.feedback)elements.feedback.textContent=result.message;};
     if(elements.exportButton)elements.exportButton.onclick=()=>elements.onExport?.(this.exportText('manual-export'));
@@ -197,7 +184,7 @@ export class ARCollisions {
     this.archive.capture(this.sessionId,this.sessionOrigin,reason,events,this.lastBlockAvailable?this.lastBlock:null,this.snapshot());return this.archive.text();
   }
   diagnosticText() {
-    return JSON.stringify({version:'1.1.7',session:this.sessionId,lastMapClearReason:this.lastMapClearReason,lastBlock:this.lastBlockAvailable?{...this.lastBlock,ageMs:Math.max(0,this.time-this.lastBlock.time)}:null,state:this.snapshot(),events:Array.from({length:this.eventCount},(_,i)=>this.events[(this.eventCursor-this.eventCount+i+32)%32])},null,2);
+    return JSON.stringify({version:BUILD.version,buildRevision:BUILD.revision,cache:BUILD.cache,session:this.sessionId,lastMapClearReason:this.lastMapClearReason,lastBlock:this.lastBlockAvailable?{...this.lastBlock,ageMs:Math.max(0,this.time-this.lastBlock.time)}:null,state:this.snapshot(),events:Array.from({length:this.eventCount},(_,i)=>this.events[(this.eventCursor-this.eventCount+i+32)%32])},null,2);
   }
   lifecycle(kind,detail=''){
     if(!this.sessionId)return;
@@ -209,26 +196,14 @@ export class ARCollisions {
   setCharacter(id, scale, position) {
     const started=this.now();const changed=this.characterId!==id||this.characterScale!==scale;
     this.characterId=id;this.characterScale=scale;characterVolume(id,scale,position[1],this.volume);this.position.set(position);
-    if(this.orientedEnabled)configurePose(this.volume,id,this.poseYaw,this.poseDance);
-    else {this.volume.bodyBounds=null;this.volume.poseMode='legacy-circular';}
+    this.volume.bodyBounds=null;this.volume.poseMode='legacy-circular';
     if(changed&&this.anchored){this.placementPending=true;this.lifecycle('body-change','validar eventual sobreposição; sem deslocamento automático');}
     this.characterVolumeMs=Math.max(0,this.now()-started);
   }
   requestPose(yaw,dance,time=this.time){
-    const started=this.now();this.poseDesiredYaw=yaw;
-    // The legacy all-animation circles are invariant under yaw and dance. Adopt the
-    // controller's heading without a pose query, including when already overlapping.
-    if(!this.orientedEnabled){this.poseYaw=yaw;this.poseDance=!!dance;this.posePending=false;this.poseRejects=0;this.poseRejection=null;this.volumeUpdateMs=(this.characterVolumeMs||0)+Math.max(0,this.now()-started);return true;}
-    if(yaw===this.poseYaw&&!!dance===this.poseDance){this.posePending=false;this.poseRejects=0;this.poseRejection=null;this.volumeUpdateMs=(this.characterVolumeMs||0)+Math.max(0,this.now()-started);return true;}
-    if(this.posePending&&time-this.poseAttemptAt<125&&this.position[0]===this.poseAttemptX&&this.position[2]===this.poseAttemptZ&&!!dance===this.poseAttemptDance&&yaw===this.poseAttemptYaw){this.poseRejects++;this.poseRejection='cached-occupied-target-volume';this.volumeUpdateMs=(this.characterVolumeMs||0)+Math.max(0,this.now()-started);return false;}
-    const v=configurePose(characterVolume(this.characterId||'bip',this.characterScale||1,this.volume.ground,this.candidateVolume),this.characterId||'bip',yaw,dance);
-    this.poseAttemptAt=time;this.poseAttemptYaw=yaw;this.poseAttemptX=this.position[0];this.poseAttemptZ=this.position[2];this.poseAttemptDance=!!dance;
-    // Leaving the all-animation circle is a subset for any heading. Rotating it is invariant.
-    const shrinking=this.poseDance,needsCheck=!shrinking&&(!dance||!this.poseDance);
-    if(needsCheck&&this.enabled&&this.anchored&&this.supportValid&&this.field.collides(this.position[0],this.position[2],v,time,this.resolver.skin)){
-      this.posePending=true;this.poseRejects++;this.poseRejection='occupied-target-volume';this.volumeUpdateMs=(this.characterVolumeMs||0)+Math.max(0,this.now()-started);return false;
-    }
-    this.poseYaw=yaw;this.poseDance=!!dance;this.posePending=false;this.poseRejects=0;this.poseRejection=null;configurePose(this.volume,this.characterId||'bip',yaw,dance);this.volumeUpdateMs=(this.characterVolumeMs||0)+Math.max(0,this.now()-started);return true;
+    const started=this.now();this.poseDesiredYaw=this.poseYaw=yaw;this.poseDance=!!dance;
+    this.posePending=false;this.poseRejects=0;this.poseRejection=null;
+    this.volumeUpdateMs=(this.characterVolumeMs||0)+Math.max(0,this.now()-started);return true;
   }
   validatePlacement(time){
     if(!this.enabled||!this.anchored||!this.supportValid||(!this.placementPending&&this.placementState!=='occupied'))return;
@@ -361,7 +336,7 @@ export class ARCollisions {
     this.coverage=this.map.coverage(this.position[0],this.position[2],this.volume,time);
     this.reconstructionMs=Math.max(0,this.now()-mapStarted);
     this.revalidator.update(time,reader,this.projector,view.projectionMatrix,this.map,this.position,this.volume,this.intentX,this.intentZ);
-    this.map.finishGeometry();this.validatePlacement(time);this.adaptSpatial(this.reconstructionMs+(this.revalidator.costMs||0));
+    this.map.finishGeometry();this.adaptSpatial(this.reconstructionMs+(this.revalidator.costMs||0));
   }
   adaptSpatial(cost) {
     if(cost>4){this.interval=Math.min(500,this.interval*1.5);this.columns=16;this.rows=12;this.fastUpdates=0;this.adaptiveReason='custo espacial >4 ms';this.lastReduction=this.time;}
@@ -398,6 +373,7 @@ export class ARCollisions {
     }
     if(this.enabled)this.queryMs=Math.max(0,this.now()-moveStarted);
     this.requestedDx=dx;this.requestedDz=dz;this.allowedDx=this.result.x-position[0];this.allowedDz=this.result.z-position[2];
+    this.placementPenetration=this.penetrationBefore;this.placementState=this.penetrationBefore===null?'waiting-for-data':this.penetrationBefore>0?'occupied':'no-known-overlap';
     this.initialOverlap=this.penetrationBefore>0;this.translationRejects=this.blocked?this.translationRejects+1:0;this.translationRejection=this.blocked?this.resolver.result.reason:null;
     if (this.enabled && Math.hypot(dx,dz)>1e-8) {
       if(time-this.lastSlotTime>=250){this.eventCursor=(this.eventCursor+1)%32;this.eventCount=Math.min(32,this.eventCount+1);this.lastSlotTime=time;}
@@ -421,7 +397,7 @@ export class ARCollisions {
       const memory=this.map.stats(time);event.confirmedCells=memory.confirmed;event.consolidatedCells=memory.consolidated;event.awaitingCells=memory.awaiting;event.releasedCells=memory.released;
       this.lastEvent=time;if(this.blocked){Object.assign(this.lastBlock,event);this.lastBlockAvailable=true;}
     }
-    this.position[0] = this.result.x; this.position[2] = this.result.z;this.validatePlacement(time);
+    this.position[0] = this.result.x; this.position[2] = this.result.z;
     return this.result;
   }
   phase() {
@@ -436,7 +412,7 @@ export class ARCollisions {
   }
   snapshot() {
     const planeY=this.supportAt(this.position[0],this.position[2]);
-    return {poseRejection:this.poseRejection,poseRejects:this.poseRejects,translationRejection:this.translationRejection,translationRejects:this.translationRejects,requestedDx:this.requestedDx,requestedDz:this.requestedDz,allowedDx:this.allowedDx,allowedDz:this.allowedDz,initialOverlap:this.initialOverlap,character:this.characterId??null,scale:this.characterScale??null,lifecycle:this.lifecycleSnapshot(),volumeMode:this.volume.poseMode||'legacy',volumeYaw:this.poseYaw,posePending:this.posePending,requestedYaw:this.poseDesiredYaw,volumeUpdateMs:this.volumeUpdateMs,placementState:this.placementState,placementPenetration:this.placementPenetration??null,mapGeneration:this.mapGeneration??0,contact:this.contact?{...this.contact}:null,blockedCells:this.map.blockedDetails(this.time),acquisitionMs:this.acquisitionMs,nativeReadMs:this.nativeReadMs,readerMs:this.readerMs,projectionMs:this.projectionMs,gridReadMs:this.gridReadMs,pointReconstructionMs:this.pointReconstructionMs,mapUpdateMs:this.mapUpdateMs,contactGeometryMs:this.contactGeometryMs,freeRayMs:this.freeRayMs,freeRayCount:this.freeRayCount,adaptiveReason:this.adaptiveReason,lastReduction:this.lastReduction,session:this.sessionId,suspended:!!this.suspended,lastMapClearReason:this.lastMapClearReason??null,guided:this.guided, guidedNewCells:this.guided?this.map.createdCount-this.guidedBaseline:0, memory:this.map.stats(this.time), revalidationMs:this.revalidator.costMs, revalidationChecks:this.revalidator.checks, revalidationQueries:this.revalidator.queries, memoryEvidence:this.blocked?this.blockEvidence:null, enabled: this.enabled, phase: this.phase(), used: this.used, sampled: this.sampled,
+    return {runtime:this.archive.runtimeInfo?.()||BUILD,placementMeasurement:'move-start',poseRejection:this.poseRejection,poseRejects:this.poseRejects,translationRejection:this.translationRejection,translationRejects:this.translationRejects,requestedDx:this.requestedDx,requestedDz:this.requestedDz,allowedDx:this.allowedDx,allowedDz:this.allowedDz,initialOverlap:this.initialOverlap,character:this.characterId??null,scale:this.characterScale??null,lifecycle:this.lifecycleSnapshot(),volumeMode:this.volume.poseMode||'legacy',volumeYaw:this.poseYaw,posePending:this.posePending,requestedYaw:this.poseDesiredYaw,volumeUpdateMs:this.volumeUpdateMs,placementState:this.placementState,placementPenetration:this.placementPenetration??null,mapGeneration:this.mapGeneration??0,contact:this.contact?{...this.contact}:null,blockedCells:this.map.blockedDetails(this.time),acquisitionMs:this.acquisitionMs,nativeReadMs:this.nativeReadMs,readerMs:this.readerMs,projectionMs:this.projectionMs,gridReadMs:this.gridReadMs,pointReconstructionMs:this.pointReconstructionMs,mapUpdateMs:this.mapUpdateMs,contactGeometryMs:this.contactGeometryMs,freeRayMs:this.freeRayMs,freeRayCount:this.freeRayCount,adaptiveReason:this.adaptiveReason,lastReduction:this.lastReduction,session:this.sessionId,suspended:!!this.suspended,lastMapClearReason:this.lastMapClearReason??null,guided:this.guided, guidedNewCells:this.guided?this.map.createdCount-this.guidedBaseline:0, memory:this.map.stats(this.time), revalidationMs:this.revalidator.costMs, revalidationChecks:this.revalidator.checks, revalidationQueries:this.revalidator.queries, memoryEvidence:this.blocked?this.blockEvidence:null, enabled: this.enabled, phase: this.phase(), used: this.used, sampled: this.sampled,
       occupied: this.map.occupiedCount, cells: this.map.cells.size, freeCells: this.map.free.size,
       hz: this.hz, reconstructionMs: this.reconstructionMs, queryMs: this.queryMs,
       coverage: this.coverage, direction: this.direction, blocked: this.blocked,

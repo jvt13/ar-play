@@ -10,3 +10,5 @@ body.xr #hint{position:static;transform:none;align-self:center;max-width:90%;mar
 #mappingReadout[hidden]{display:none}#mappingToggle{font-size:11px;padding:6px 10px;border-radius:9px}
 
 #lastDiagnostic[hidden]{display:none}#lastDiagnostic{align-self:flex-start;font-size:11px;padding:6px 10px}#archiveText{max-height:45vh;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px}
+
+.brand #appVersion{display:block;font-size:10px;letter-spacing:.04em;color:#b7f36e}#updateApp[hidden]{display:none}#updateApp{align-self:center;padding:6px 12px;border-radius:8px;font-size:11px}#buildStatus{display:block;font-size:10px;overflow-wrap:anywhere;margin:5px 0}

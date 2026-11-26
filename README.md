@@ -1,4 +1,4 @@
-# AR Play — v1.1.7 (MVP)
+# AR Play — v1.1.8 (MVP)
 
 Aplicativo web de personagens 3D interativos, inspirado na experiência de câmera com efeitos de realidade aumentada. Não é uma reprodução do TikTok. Os três personagens (Bip, Nori e Luma) são construídos proceduralmente, sem baixar modelos ou usar ativos proprietários.
 
@@ -25,6 +25,7 @@ Acesso via IP local por HTTP (por exemplo, http://192.168.x.x:8080) pode abrir a
 ## Arquitetura
 
 - `index.html`, `style.css`: UI responsiva mobile-first.
+- `src/build.js`, `src/boot.js`, `src/pwa.js`: identidade carregada, bootstrap coerente e atualização segura.
 - `src/app.js`: gerenciamento dos modos, WebXR, câmera, controles, captura, PWA.
 - `src/depth.js`: negociação opcional de profundidade e diagnóstico experimental em AR, sem física ou oclusão.
 - `src/spatial-map.js`: reconstrução no referencial XR e mapa esparso temporário de ocupação/cobertura.
@@ -40,7 +41,7 @@ A câmera, renderização e gravação são processadas localmente. O app não e
 
 ## Testes
 
-`npm test`: 196 testes, incluindo reconstrução 3D, projeções assimétricas, chão, confirmação/expiração, cobertura desconhecida, paredes/móveis, posições efetivas, recuo, deslizamento, escala e limpeza. A correção 1.1.1 acrescenta bloqueio imediato com mapa parcial, persistência lateral, liberação confiável, limites geométricos do contato e saída de sobreposição. A expiração de ocupação descarta votos livres fracos anteriores e retorna a desconhecido. O cache atual é `ar-play-v1.1.7`. `npm run check` valida a sintaxe JavaScript. Geometria e sessões automatizadas são sintéticas; a suíte de navegador também verifica a integração XR simulada, a sonda com diagnóstico fechado e a preservação dos modos existentes.
+`npm test`: 242 testes registrados (234 aprovados e 8 expectativas físicas históricas aposentadas com justificativa), incluindo reconstrução 3D, projeções assimétricas, chão, confirmação/expiração, cobertura desconhecida, paredes/móveis, posições efetivas, recuo, deslizamento, escala e limpeza. A correção 1.1.1 acrescenta bloqueio imediato com mapa parcial, persistência lateral, liberação confiável, limites geométricos do contato e saída de sobreposição. A expiração de ocupação descarta votos livres fracos anteriores e retorna a desconhecido. O cache atual é `ar-play-v1.1.8-r1`. `npm run check` valida a sintaxe JavaScript. Geometria e sessões automatizadas são sintéticas; a suíte de navegador também verifica a integração XR simulada, a sonda com diagnóstico fechado e a preservação dos modos existentes.
 
 Benchmark CPU opcional: `node tests/spatial_benchmark.mjs`. Usa geometria sintética, informa ambiente, mediana, p95 e máximos; não mede sensor, câmera ou desempenho no celular.
 
@@ -48,25 +49,27 @@ Suíte de navegador: instale Python 3.12+, Playwright (`python -m pip install pl
 
 Câmera física, sensores, instalação no Android e ARCore exigem validação no aparelho. Os testes de navegador usam câmera simulada e não homologam WebXR/ARCore.
 
-## Recuperação da jogabilidade — 1.1.7 (ARP-004H)
+## Recuperação da cadeia física — 1.1.8 (ARP-004I)
 
-O padrão volta aos 12 cilindros circulares da 1.1.5, conservadores para todas as orientações e animações. Giro e dança adotam a orientação do controle sem consulta espacial de pose: o volume circular é invariável. Translação, recuo e deslizamento continuam passando pelo mesmo resolvedor e pelas mesmas proteções de contato. Margem de 2,5 cm, pele de 1,5 cm, voxels de 12 cm, retenção de 45 s e sonda de 900 ms permanecem.
+A cadeia física volta à referência funcional `14e6ca2` da 1.1.5. Mapa espacial, projeção/classificação, sonda, revalidação e volume circular de 12 faixas usam as implementações da referência. O resolvedor usa os mesmos passos, projeções de eixo e regras de saída, com captura adicional somente de escalares diagnósticos. Foram retirados o avanço parcial posterior e consultas automáticas extras de posicionamento. Margens de 2,5/1,5 cm, chão de 6 cm, voxels de 12 cm, memória de 45 s e sonda de 900 ms permanecem.
 
-O volume orientado da 1.1.6 fica experimental, desativado na aplicação e acessível somente por `new ARCollisions({}, {orientedVolume:true})` em desenvolvimento/testes. Há um único resolvedor e campo de colisões por controlador. Os testes orientados em `tests/oriented.test.js` e os ensaios de rejeição de pose continuam explícitos. O perfil circular pode parar antes do corpo em repouso e precisa de corredores mais largos; a estabilidade tem prioridade nesta versão. A visualização azul mostra as faixas circulares efetivamente usadas.
+O controlador orientado foi retirado, inclusive o opt-in. Sua matemática histórica está isolada em `tests/experimental/`; o desenvolvimento continua no histórico Git. Oito testes específicos dos comportamentos físicos aposentados mantêm corpos e motivos de isolamento explícitos. Os demais testes anteriores aplicáveis continuam ativos. A revalidação volta ao critério legado de evidência livre, inclusive quando a pegada está parcialmente fora da vista; oclusão por superfície mais próxima, dados ausentes e evidência temporal continuam protegidos conforme a 1.1.5.
 
-A comparação dirigida usou 14e6ca2 (1.1.5) e d7ac837 (1.1.6), as mesmas geometrias e sequências em 40%, 54%, 66%, 81% e 100%. A 1.1.6 rejeitou giros próximos a ocupações e durante sobreposição; os ensaios não reproduziram um bloqueio geral de translação. Sem JSON da regressão física, a causa completa permanece não confirmada. A candidata circular reproduz as 40 combinações de referência de deslocamento e contato da 1.1.5, sem novas penetrações nos cenários controlados. A origem dos valores está em `tests/fixtures/recovery-v115.json`.
+A comparação completa usa o controlador executado pela aplicação em 39 sequências (13 cenários, escalas 40%, 81% e 100%, 400 atualizações por sequência), incluindo aquisição, chão, ocupações, sonda e movimento. Todos os estados são comparados à execução da 1.1.5. As mesmas entradas também rodam na 1.1.7. A origem dos valores está em `tests/fixtures/chain-v115.json`; `tests/chain-compare.mjs` permite reproduzir a comparação com snapshots locais dos commits.
 
-Em um corredor diagonal, quando os dois eixos separados estão bloqueados mas parte do vetor original está livre, o resolvedor permite essa parte até contato. O diagnóstico distingue a fonte/etapa da última subconsulta rejeitada do contato representativo na posição final: penetrações desses contatos diferentes não devem ser subtraídas. O raio geral é o envelope de busca; o apoio direcional do contato é registrado separadamente.
+Sobreposição não é corrigida apagando obstáculos, concedendo imunidade ou deslocando o personagem sem entrada. Um piso informado coerentemente 9 cm acima do apoio gera ocupação e bloqueio nas três versões, incluindo a referência. Ruído pequeno e chão inclinado coerente com o apoio não produzem esse bloqueio nos testes. Essa limitação ilustra uma hipótese de erro de medição/referência; não identifica a causa no aparelho nem permite tratar os indicadores fornecidos como uma única consulta. O diagnóstico informa que a sobreposição normal foi medida no início do deslocamento (`placementMeasurement=move-start`).
 
-Posicionamento adota imediatamente a altura do hit-test. Novas evidências podem indicar **Posição sobreposta: afaste-se ou reposicione**, sem teletransporte ou imunidade. Reposicionar limpa o mapa dependente do apoio; uma nova sessão começa vazia. Contato/mensagem antigos são limpos imediatamente ao mudar a geração. O diagnóstico recuperável inclui até 16 eventos de início, posicionamento, suspensão/retomada e limpeza, identificados por sessão/geração, sem coordenadas absolutas. Alterações de personagem/escala podem criar sobreposição: afaste-se ou reposicione. São preservados avanço parcial válido, reconstrução otimizada, memória adaptativa e mapeamento guiado. Não há física vertical nem mudanças nos personagens, Estúdio ou Câmera.
+Arquivo JSON anônimo e recuperável, eventos de sessão, limpeza visual e informações adicionais foram preservados sem condicionar o movimento. Os testes incluem repetição do recuo no controlador real: 12 ensaios por suíte de navegador, em três escalas, com deslocamento solicitado/permitido após 16 atualizações. A observação anterior de 200 ms continua registrada; o teste de progresso aguarda atualizações efetivas, sem tratar velocidade do navegador desktop como propriedade física.
 
-Células bloqueantes continuam priorizadas para revalidação. O texto informa visibilidade da pegada, amostras coerentes/distintas e idade da última consulta. Pegada parcialmente fora da vista não é liberada por observar apenas o centro. Observe centro e bordas da região antiga por várias atualizações; dados insuficientes/oclusão preservam ocupação válida. Isso não certifica a precisão física nem identifica automaticamente obstáculos fantasmas.
+## Versão carregada e atualização da PWA
 
-O diagnóstico informa perfil físico, orientação pretendida/adotada, motivo e contagem de rejeições de pose/translação, deslocamento solicitado/permitido e sobreposição inicial. Os dados vêm do controlador real; continuam limitados, anônimos, em memória JS, com exportação JSON e recuperação após o fim da sessão.
+`src/build.js` é a fonte de versão, revisão e cache usada pelo runtime, diagnóstico e Service Worker. A versão aparece permanentemente sob a marca em Estúdio, Câmera e AR. Ajuda, diagnóstico e JSON mostram o build carregado, revisão, cache, estado do SW e atualização identificada.
 
-Homologação física da **1.1.7 pendente**. Comece com Bip a **81%**, faça mapeamento guiado e percorra uma área conhecida: avance, recue após contato, deslize na parede, gire parado e inverta rapidamente o joystick. Retire um objeto e observe toda a região por várias atualizações. Repita em 40%, 54%, 66% e 100% e teste suspensão/retomada e nova sessão. Após bloqueio suspeito, solte o joystick e exporte o diagnóstico antes de recarregar.
+O bootstrap impede combinar módulos novos com o cache de uma versão antiga. Uma atualização aguardando ativação oferece **Atualizar**; o botão fica bloqueado enquanto AR ou gravação estiverem ativos. Encerre essas atividades e escolha a atualização. Somente essa ação explícita recarrega a página após a troca do controlador. Uma ativação externa por outra aba não recarrega automaticamente a sessão atual. Migrações a partir dos workers/caches 1.1.5, 1.1.6 e 1.1.7 são verificadas no navegador, além de continuidade de outra aba, revisão seguinte aguardando em XR e recarga offline.
 
-Benchmarks CPU sintéticos: `node --expose-gc tests/spatial_benchmark.mjs`, `node --expose-gc tests/memory_benchmark.mjs` e `node tests/volume_benchmark.mjs`. Para comparação histórica, extraia `src/` dos commits 14e6ca2 e d7ac837 para `reports/v115` e `reports/v116`, respectivamente, cada um com `package.json` contendo `{"type":"module"}`. Execute `node tests/recovery_compare.mjs reports/v115 reports/v116` e `node tests/recovery_benchmark.mjs reports/v115 reports/v116`. Não medem FPS Android nem certificam comportamento físico.
+Para comparar versões, extraia `src/` de `14e6ca2` e `8b7391d` em `reports/v115` e `reports/v117`, cada diretório com `package.json` contendo `{"type":"module"}`. Execute `node tests/chain-compare.mjs reports/v115 reports/v117` e `node tests/stability_benchmark.mjs reports/v115 reports/v117`. O benchmark mede mediana/p95/máximo de sete operações em CPU desktop; não mede FPS Android.
+
+**Homologação física da 1.1.8 pendente.** Confirme a versão e a revisão na Ajuda, comece com Bip 81%, posicione em chão livre, mapeie e teste avanço, giro, recuo, deslizamento e mudança de direção. Repita em 40% e 100%, após reposicionar, mudar tamanho e ativar colisões depois de andar sem elas. Retire um objeto e observe a região por várias atualizações. Se houver trava, exporte o JSON antes de recarregar e registre o apoio, a escala e o movimento tentado. A restauração e as simulações não certificam sensores nem resolvem automaticamente ocupações produzidas por erro de medição.
 
 ## Contato e recuperação do diagnóstico — 1.1.5
 

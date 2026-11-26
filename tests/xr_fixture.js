@@ -2,6 +2,7 @@
 (() => {
   const I = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
   const test = window.__xrTest = {scenario: 'granted', reads: 0, requests: [], active: false};
+  test.step=(count=1,dt=16)=>{for(let i=0;i<count;i++){const callback=test.pending;test.pending=null;if(!callback)throw Error('No pending manual XR frame');test.clock=(test.clock??1000)+dt;test.active=true;try{callback(test.clock,new FakeFrame(test.session));}finally{test.active=false;}}};
   document.addEventListener('DOMContentLoaded', () => {
     const banner = document.createElement('div');
     banner.textContent = 'TESTE SIMULADO — sem medição física';
@@ -65,6 +66,7 @@
         },
         requestHitTestSource: async () => ({cancel() {}}),
         requestAnimationFrame(callback) {
+          if(test.manualFrames){test.pending=callback;return;}
           requestAnimationFrame(time => {
             if (this.ended) return;
             test.active = true;
@@ -73,6 +75,7 @@
         },
         async end() { this.ended = true; handlers.end?.(); },
       };
+      test.session=session;
       test.visibility=state=>{session.visibilityState=state;handlers.visibilitychange?.({session});};
       test.place = () => handlers.select?.();
       return session;

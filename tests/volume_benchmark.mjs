@@ -1,6 +1,7 @@
+// Historical experimental benchmark; not an acceptance benchmark for 1.1.8. Use stability_benchmark.mjs.
 // Synthetic desktop CPU comparison. No physical sensor, calibration or Android FPS claim.
 import {ARCollisions,characterVolume,CollisionResolver} from '../src/collision.js';
-import {configurePose} from '../src/volume.js';
+import {configurePose} from './experimental/volume.js';
 import {SpatialMap} from '../src/spatial-map.js';
 const stats=a=>{a.sort((x,y)=>x-y);return {n:a.length,medianMs:a[Math.floor(a.length*.5)],p95Ms:a[Math.floor(a.length*.95)],maxMs:a.at(-1)}};
 const timed=(fn,n=1000)=>{const a=[];for(let i=0;i<n+100;i++){const start=performance.now();fn(i);if(i>=100)a.push(performance.now()-start)}return stats(a)};

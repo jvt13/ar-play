@@ -1,0 +1,513 @@
+{
+  "sourceCommit": "14e6ca2fff59065213abc9dc4b57647328c66368",
+  "fixture": "chain-fixtures.mjs",
+  "results": [
+    {
+      "version": "1.1.5",
+      "scenario": "floor",
+      "scale": 0.4,
+      "distance": 1.9999999999999796,
+      "final": [
+        -4.336808689942018e-17,
+        -0.8
+      ],
+      "maxStreak": 0,
+      "maxOccupied": 0,
+      "traceSha256": "f8bb4ab4c5aa40b38a71117809067df5b2cb0eae5368cd4de98798a59ce58d98"
+    },
+    {
+      "version": "1.1.5",
+      "scenario": "map-after-placement",
+      "scale": 0.4,
+      "distance": 1.2669010925292912,
+      "final": [
+        -0.2330989074707033,
+        -1.2999999999999938
+      ],
+      "maxStreak": 147,
+      "maxOccupied": 7,
+      "traceSha256": "fa241969be36b807de5c5e790bcb30430e405ed8ec068aeb7789793d8bf880aa"
+    },
+    {
+      "version": "1.1.5",
+      "scenario": "enable-after-motion",
+      "scale": 0.4,
+      "distance": 1.3499999999999934,
+      "final": [
+        -0.1500000000000001,
+        -1.2999999999999938
+      ],
+      "maxStreak": 130,
+      "maxOccupied": 12,
+      "traceSha256": "0c477d4e4c5a6be636eb520c678e8683b76309ee731e6a833c902b5ca44006ad"
+    },
+    {
+      "version": "1.1.5",
+      "scenario": "reposition",
+      "scale": 0.4,
+      "distance": 1.7654347991943204,
+      "final": [
+        -0.6500000000000004,
+        -0.8
+      ],
+      "maxStreak": 47,
+      "maxOccupied": 7,
+      "traceSha256": "4d50c29e0b9106af6ec9825bb21dcee63bffa8a7001444f919d6f5a3c11c80ec"
+    },
+    {
+      "version": "1.1.5",
+      "scenario": "resize",
+      "scale": 0.4,
+      "distance": 1.00543479919433,
+      "final": [
+        0.02543479919433588,
+        -1.2999999999999938
+      ],
+      "maxStreak": 199,
+      "maxOccupied": 35,
+      "traceSha256": "2d6af6c501c2eeebb2ab2ed196c3a52e50c455a0d2d65dac3de9d8b603fc74f8"
+    },
+    {
+      "version": "1.1.5",
+      "scenario": "noisy-floor",
+      "scale": 0.4,
+      "distance": 1.9999999999999796,
+      "final": [
+        -4.336808689942018e-17,
+        -0.8
+      ],
+      "maxStreak": 0,
+      "maxOccupied": 0,
+      "traceSha256": "f8bb4ab4c5aa40b38a71117809067df5b2cb0eae5368cd4de98798a59ce58d98"
+    },
+    {
+      "version": "1.1.5",
+      "scenario": "pitched-camera",
+      "scale": 0.4,
+      "distance": 1.9999999999999796,
+      "final": [
+        -4.336808689942018e-17,
+        -0.8
+      ],
+      "maxStreak": 0,
+      "maxOccupied": 0,
+      "traceSha256": "f8bb4ab4c5aa40b38a71117809067df5b2cb0eae5368cd4de98798a59ce58d98"
+    },
+    {
+      "version": "1.1.5",
+      "scenario": "raised-floor",
+      "scale": 0.4,
+      "distance": 0,
+      "final": [
+        0,
+        -0.8
+      ],
+      "maxStreak": 400,
+      "maxOccupied": 232,
+      "traceSha256": "02160d1248caa4f0a454c5735353cb0bd4de0f54917c2f56c3bf0af1159e2fc1"
+    },
+    {
+      "version": "1.1.5",
+      "scenario": "initial-overlap",
+      "scale": 0.4,
+      "distance": 1.5799999999999885,
+      "final": [
+        -0.42000000000000026,
+        -0.8
+      ],
+      "maxStreak": 84,
+      "maxOccupied": 51,
+      "traceSha256": "e5bc93919d45a845abe94519504e6cef6b972f4a3997b647f38117c730a40fce"
+    },
+    {
+      "version": "1.1.5",
+      "scenario": "concurrent",
+      "scale": 0.4,
+      "distance": 1.5799999999999885,
+      "final": [
+        -0.42000000000000026,
+        -0.8
+      ],
+      "maxStreak": 84,
+      "maxOccupied": 51,
+      "traceSha256": "e26ad1140a09c24cf16abe71a028882b115e31755f1eb6436e033d544dc47606"
+    },
+    {
+      "version": "1.1.5",
+      "scenario": "small",
+      "scale": 0.4,
+      "distance": 1.305531463623041,
+      "final": [
+        -0.19446853637695324,
+        -1.2999999999999938
+      ],
+      "maxStreak": 105,
+      "maxOccupied": 4,
+      "traceSha256": "4f4d899a3bee406a19ff45f91360b672eb16c3366cc29b7288e0aecad1250bc6"
+    },
+    {
+      "version": "1.1.5",
+      "scenario": "large",
+      "scale": 0.4,
+      "distance": 1.2654347991943302,
+      "final": [
+        -0.23456520080566426,
+        -1.2999999999999938
+      ],
+      "maxStreak": 147,
+      "maxOccupied": 7,
+      "traceSha256": "ac806673da03e5ea1a5dd6d89a732cc4253a245a7f598cf42cfd7db64713ee5c"
+    },
+    {
+      "version": "1.1.5",
+      "scenario": "historical",
+      "scale": 0.4,
+      "distance": 1.2654347991943302,
+      "final": [
+        -0.23456520080566426,
+        -1.2999999999999938
+      ],
+      "maxStreak": 147,
+      "maxOccupied": 7,
+      "traceSha256": "ac806673da03e5ea1a5dd6d89a732cc4253a245a7f598cf42cfd7db64713ee5c"
+    },
+    {
+      "version": "1.1.5",
+      "scenario": "floor",
+      "scale": 0.81,
+      "distance": 1.9999999999999796,
+      "final": [
+        -4.336808689942018e-17,
+        -0.8
+      ],
+      "maxStreak": 0,
+      "maxOccupied": 0,
+      "traceSha256": "f8bb4ab4c5aa40b38a71117809067df5b2cb0eae5368cd4de98798a59ce58d98"
+    },
+    {
+      "version": "1.1.5",
+      "scenario": "map-after-placement",
+      "scale": 0.81,
+      "distance": 1.165798263549799,
+      "final": [
+        -0.3342017364501955,
+        -1.2999999999999938
+      ],
+      "maxStreak": 167,
+      "maxOccupied": 21,
+      "traceSha256": "4c093911ee431440d239c78ab4998f605a841404679ea3c3e35fbd8d5ef4f9d8"
+    },
+    {
+      "version": "1.1.5",
+      "scenario": "enable-after-motion",
+      "scale": 0.81,
+      "distance": 0.3500000000000002,
+      "final": [
+        0.3500000000000002,
+        -0.8
+      ],
+      "maxStreak": 330,
+      "maxOccupied": 38,
+      "traceSha256": "d4132b71e2f83b2b78bb14666eb11e36739fbd5b2ef616f27fec947b59fef35d"
+    },
+    {
+      "version": "1.1.5",
+      "scenario": "reposition",
+      "scale": 0.81,
+      "distance": 1.6321884918212763,
+      "final": [
+        -0.6500000000000004,
+        -0.8
+      ],
+      "maxStreak": 74,
+      "maxOccupied": 24,
+      "traceSha256": "d08b710a780a7eccdcc2095fa89aee47d2762ce16ddae8afa382aa0ba18a04b5"
+    },
+    {
+      "version": "1.1.5",
+      "scenario": "resize",
+      "scale": 0.81,
+      "distance": 1.2321884918212849,
+      "final": [
+        -0.3678115081787112,
+        -1.199999999999996
+      ],
+      "maxStreak": 80,
+      "maxOccupied": 39,
+      "traceSha256": "b2124f407b18fa0e6cc0864f3768ac947221fb47247c9c7e9eb2ee4c8527b34e"
+    },
+    {
+      "version": "1.1.5",
+      "scenario": "noisy-floor",
+      "scale": 0.81,
+      "distance": 1.9999999999999796,
+      "final": [
+        -4.336808689942018e-17,
+        -0.8
+      ],
+      "maxStreak": 0,
+      "maxOccupied": 0,
+      "traceSha256": "f8bb4ab4c5aa40b38a71117809067df5b2cb0eae5368cd4de98798a59ce58d98"
+    },
+    {
+      "version": "1.1.5",
+      "scenario": "pitched-camera",
+      "scale": 0.81,
+      "distance": 1.9999999999999796,
+      "final": [
+        -4.336808689942018e-17,
+        -0.8
+      ],
+      "maxStreak": 0,
+      "maxOccupied": 0,
+      "traceSha256": "f8bb4ab4c5aa40b38a71117809067df5b2cb0eae5368cd4de98798a59ce58d98"
+    },
+    {
+      "version": "1.1.5",
+      "scenario": "raised-floor",
+      "scale": 0.81,
+      "distance": 0,
+      "final": [
+        0,
+        -0.8
+      ],
+      "maxStreak": 400,
+      "maxOccupied": 236,
+      "traceSha256": "de40e4915c297790510aa4f2969a7bae9e588dc49fb8a8ca7985a8e51253de99"
+    },
+    {
+      "version": "1.1.5",
+      "scenario": "initial-overlap",
+      "scale": 0.81,
+      "distance": 1.5799999999999885,
+      "final": [
+        -0.42000000000000026,
+        -0.8
+      ],
+      "maxStreak": 84,
+      "maxOccupied": 85,
+      "traceSha256": "2c61949e96c35cc0e43841c5273d08302580bd700ef48b9b0a4cb1e265bd2b6b"
+    },
+    {
+      "version": "1.1.5",
+      "scenario": "concurrent",
+      "scale": 0.81,
+      "distance": 1.5799999999999885,
+      "final": [
+        -0.42000000000000026,
+        -0.8
+      ],
+      "maxStreak": 84,
+      "maxOccupied": 85,
+      "traceSha256": "2c684530ade8c887d63c18716183c7564642da92006455ec91a25b00c4516f4f"
+    },
+    {
+      "version": "1.1.5",
+      "scenario": "small",
+      "scale": 0.81,
+      "distance": 1.4348902893066322,
+      "final": [
+        -0.3406910705566409,
+        -1.0244186401367186
+      ],
+      "maxStreak": 51,
+      "maxOccupied": 6,
+      "traceSha256": "a4b7fca84fe3232f1790e472e7d07ff10562db36757283c0c15a171ac5ab7d83"
+    },
+    {
+      "version": "1.1.5",
+      "scenario": "large",
+      "scale": 0.81,
+      "distance": 1.6321884918212763,
+      "final": [
+        -0.3678115081787112,
+        -0.8
+      ],
+      "maxStreak": 74,
+      "maxOccupied": 24,
+      "traceSha256": "1223e5c272537ae91fb86b07756a9b137cee83bc6084fdc80cbe13b292afc36d"
+    },
+    {
+      "version": "1.1.5",
+      "scenario": "historical",
+      "scale": 0.81,
+      "distance": 1.6321884918212763,
+      "final": [
+        -0.3678115081787112,
+        -0.8
+      ],
+      "maxStreak": 74,
+      "maxOccupied": 24,
+      "traceSha256": "1223e5c272537ae91fb86b07756a9b137cee83bc6084fdc80cbe13b292afc36d"
+    },
+    {
+      "version": "1.1.5",
+      "scenario": "floor",
+      "scale": 1,
+      "distance": 1.9999999999999796,
+      "final": [
+        -4.336808689942018e-17,
+        -0.8
+      ],
+      "maxStreak": 0,
+      "maxOccupied": 0,
+      "traceSha256": "f8bb4ab4c5aa40b38a71117809067df5b2cb0eae5368cd4de98798a59ce58d98"
+    },
+    {
+      "version": "1.1.5",
+      "scenario": "map-after-placement",
+      "scale": 1,
+      "distance": 1.1499999999999941,
+      "final": [
+        -0.35000000000000026,
+        -1.2999999999999938
+      ],
+      "maxStreak": 170,
+      "maxOccupied": 40,
+      "traceSha256": "fb9d8d1567cd16d5778f8ab214fff34857cd1a673e035217955faa419df69276"
+    },
+    {
+      "version": "1.1.5",
+      "scenario": "enable-after-motion",
+      "scale": 1,
+      "distance": 1.3499999999999934,
+      "final": [
+        -0.1500000000000001,
+        -1.2999999999999938
+      ],
+      "maxStreak": 130,
+      "maxOccupied": 42,
+      "traceSha256": "2833379443fd03e798eadb0925b8731fc241c9325de920ab091eec9e5d9e3720"
+    },
+    {
+      "version": "1.1.5",
+      "scenario": "reposition",
+      "scale": 1,
+      "distance": 1.5749999999999886,
+      "final": [
+        -0.6500000000000004,
+        -0.8
+      ],
+      "maxStreak": 85,
+      "maxOccupied": 40,
+      "traceSha256": "e9b65065a8ce9740e5b96ad68c58de31296a1e4934ad0a549b0f0a75e72b7c0e"
+    },
+    {
+      "version": "1.1.5",
+      "scenario": "resize",
+      "scale": 1,
+      "distance": 1.3068260955810493,
+      "final": [
+        -0.42500000000000027,
+        -1.068173904418944
+      ],
+      "maxStreak": 137,
+      "maxOccupied": 40,
+      "traceSha256": "f61d91f63b8826c79b4dc1bca8a4932fdc578772578285965f0470ee6bf0f4f3"
+    },
+    {
+      "version": "1.1.5",
+      "scenario": "noisy-floor",
+      "scale": 1,
+      "distance": 1.9999999999999796,
+      "final": [
+        -4.336808689942018e-17,
+        -0.8
+      ],
+      "maxStreak": 0,
+      "maxOccupied": 0,
+      "traceSha256": "f8bb4ab4c5aa40b38a71117809067df5b2cb0eae5368cd4de98798a59ce58d98"
+    },
+    {
+      "version": "1.1.5",
+      "scenario": "pitched-camera",
+      "scale": 1,
+      "distance": 1.9999999999999796,
+      "final": [
+        -4.336808689942018e-17,
+        -0.8
+      ],
+      "maxStreak": 0,
+      "maxOccupied": 0,
+      "traceSha256": "f8bb4ab4c5aa40b38a71117809067df5b2cb0eae5368cd4de98798a59ce58d98"
+    },
+    {
+      "version": "1.1.5",
+      "scenario": "raised-floor",
+      "scale": 1,
+      "distance": 0,
+      "final": [
+        0,
+        -0.8
+      ],
+      "maxStreak": 400,
+      "maxOccupied": 240,
+      "traceSha256": "7de066bf492868aa51c93fee55eb4c0b423fb59f61e421fe21d65a3bbcbdc2d4"
+    },
+    {
+      "version": "1.1.5",
+      "scenario": "initial-overlap",
+      "scale": 1,
+      "distance": 1.5349999999999895,
+      "final": [
+        -0.42000000000000026,
+        -0.8450000000000001
+      ],
+      "maxStreak": 84,
+      "maxOccupied": 85,
+      "traceSha256": "22037143de9f814e0dbb6ddd687680826b21a25816bacc0c38fffc3cd4ba1ec5"
+    },
+    {
+      "version": "1.1.5",
+      "scenario": "concurrent",
+      "scale": 1,
+      "distance": 1.5049999999999901,
+      "final": [
+        -0.39000000000000024,
+        -0.8450000000000001
+      ],
+      "maxStreak": 84,
+      "maxOccupied": 85,
+      "traceSha256": "63c0c79dea200f2dc12751d7fbfe90747c5a856a8cbd0721a1139ec9c231bf75"
+    },
+    {
+      "version": "1.1.5",
+      "scenario": "small",
+      "scale": 1,
+      "distance": 1.3149999999999942,
+      "final": [
+        -0.42500000000000027,
+        -1.059999999999999
+      ],
+      "maxStreak": 137,
+      "maxOccupied": 5,
+      "traceSha256": "78c8951a149ef6df9cc5853861c5e8320032d46b36eaf0a45fff988f41a65e5d"
+    },
+    {
+      "version": "1.1.5",
+      "scenario": "large",
+      "scale": 1,
+      "distance": 1.3068260955810493,
+      "final": [
+        -0.42500000000000027,
+        -1.068173904418944
+      ],
+      "maxStreak": 137,
+      "maxOccupied": 40,
+      "traceSha256": "f61d91f63b8826c79b4dc1bca8a4932fdc578772578285965f0470ee6bf0f4f3"
+    },
+    {
+      "version": "1.1.5",
+      "scenario": "historical",
+      "scale": 1,
+      "distance": 1.3068260955810493,
+      "final": [
+        -0.42500000000000027,
+        -1.068173904418944
+      ],
+      "maxStreak": 137,
+      "maxOccupied": 40,
+      "traceSha256": "f61d91f63b8826c79b4dc1bca8a4932fdc578772578285965f0470ee6bf0f4f3"
+    }
+  ]
+}

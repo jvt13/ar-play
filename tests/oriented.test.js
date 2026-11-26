@@ -1,8 +1,8 @@
 // SYNTHETIC geometry. The supplied phone diagnosis does not include a scene reconstruction.
-// ARP-004H: oriented tests explicitly opt in; the application defaults to circular.
+// ARP-004I: retired oriented/partial-step physics tests retain their bodies with explicit skip reasons; independent geometry tests remain active.
 import test from 'node:test';import assert from 'node:assert/strict';
 import {ARCollisions,CollisionResolver,characterVolume} from '../src/collision.js';
-import {configurePose,supportAt,radiusAt} from '../src/volume.js';
+import {configurePose,supportAt,radiusAt} from './experimental/volume.js';
 import {SpatialMap} from '../src/spatial-map.js';
 import {character} from '../src/engine.js';
 import {SpatialDebug} from '../src/spatial-debug.js';
@@ -21,7 +21,7 @@ function wedge(){
   s.probe.history.set([nx*d,.2,nz*d,250,-nz,nx,.6],i*7);
  }s.probe.count=2;return s;
 }
-test('diagonal wedge permits a partial requested path although both axis-only directions touch',()=>{
+test('diagonal wedge permits a partial requested path although both axis-only directions touch',{skip:'ARP-004I: post-1.1.5 physics retired; preserved in Git history'},()=>{
  const s=wedge(),dx=-.005380779559468197,dz=-.02696844844132508;
  s.frame(300,true);const r=s.move([0,0,0],dx,dz,300);
  assert.equal(s.penetrationBefore,0);assert.ok(s.penetrationTarget>0);
@@ -59,7 +59,7 @@ test('oriented walk envelope independently contains rendered sphere sections at 
 });
 
 
-test('oriented volume slides along a sampled wall without false radial-support contacts',()=>{
+test('oriented volume slides along a sampled wall without false radial-support contacts',{skip:'ARP-004I: post-1.1.5 physics retired; preserved in Git history'},()=>{
  const m=new SpatialMap();m.clear([0,0,0]);const v=configurePose(characterVolume('bip',.66,0),'bip',0),solver=new CollisionResolver();
  for(const t of [0,125,250]){m.begin(t,[0,0,0],v.height);for(let z=-2;z<=2;z+=.06)for(let y=.07;y<v.height;y+=.08)m.observe(.6,y,z);}
  const a={...solver.move(m,[0,0,0],1,0,v,300)},b=solver.move(m,[a.x,0,0],.3,.5,v,340);
@@ -67,18 +67,18 @@ test('oriented volume slides along a sampled wall without false radial-support c
 });
 
 
-test('a partially off-view occupied footprint cannot be released by only its visible centre',()=>{
+test('ARP-004I restores 1.1.5 legacy free-evidence revalidation for off-view footprint',()=>{
  const m=new SpatialMap();m.clear([0,0,0]);for(let t=0;t<=2000;t+=125){m.begin(t,[0,0,0],1);m.observe(1.18,.3,-1.2);}
  const info={width:160,height:90,rawValueToMeters:.001,data:new Uint16Array(14400).fill(3000).buffer,normDepthBufferFromNormView:{matrix:I()}},view={projectionMatrix:perspective(Math.PI/2,1),transform:{matrix:tr(0,.35,0)}},p=new DepthProjector(),r=new SpatialRevalidator(()=>0);assert.ok(p.configure(info,view));
  for(const t of [8000,8250,8500,8750]){m.begin(t,[0,0,0],1);r.update(t,createDepthReader(info,'luminance-alpha'),p,view.projectionMatrix,m,[0,0,0],{radius:.2,height:.7,ground:0},0,-.5);}
- assert.equal(m.stateAt(1.18,.3,-1.2,8750),'occupied');
+ assert.equal(m.stateAt(1.18,.3,-1.2,8750),'free');
 });
 
 
 function sideWall(m,x,height,t){m.begin(t,[0,0,0],height);for(let z=-1;z<=1;z+=.03)for(let y=.061;y<height;y+=height/48)m.observe(x,y,z);}
 function posedSystem(scale=.4){const s=new ARCollisions({}, {orientedVolume:true},()=>0);s.start('waiting');s.place([0,0,0]);s.setCharacter('bip',scale,[0,0,0]);s.setEnabled(true);s.frame(300,true);return s;}
 
-test('known contact improves body clearance at four scales and multiple headings for all three characters',()=>{
+test('known contact improves body clearance at four scales and multiple headings for all three characters',{skip:'ARP-004I: post-1.1.5 physics retired; preserved in Git history'},()=>{
  for(const id of ['bip','nori','luma'])for(const scale of [.4,.54,.66,1])for(const yaw of [0,Math.PI/2,Math.PI,3*Math.PI/2,.37]){
   const old=characterVolume(id,scale,0),v=configurePose(characterVolume(id,scale,0),id,yaw),m=new SpatialMap();m.clear([0,0,0]);for(const t of [0,125,250])sideWall(m,1,v.height,t);
   let radius=0,body=0;for(let y=.061;y<v.height;y+=v.height/48)radius=Math.max(radius,supportAt(v,y,y,1,0));
@@ -90,7 +90,7 @@ test('known contact improves body clearance at four scales and multiple headings
  }
 });
 
-test('dance expansion waits for space; rest/walk transitions and jump keep grounded horizontal protection',()=>{
+test('dance expansion waits for space; rest/walk transitions and jump keep grounded horizontal protection',{skip:'ARP-004I: post-1.1.5 physics retired; preserved in Git history'},()=>{
  const s=posedSystem(),v=s.volume;for(const t of [0,125,250])sideWall(s.map,.15,v.height,t);
  assert.equal(s.requestPose(0,true,300),false);assert.equal(s.poseDance,false);near(s.position[0],0);
  const out={...s.move([0,0,0],-.2,0,320)};assert.ok(out.x<-.19);assert.equal(s.requestPose(0,true,330),true);assert.equal(s.volume.bodyBounds,null);
@@ -99,7 +99,7 @@ test('dance expansion waits for space; rest/walk transitions and jump keep groun
  assert.ok(s.move([0,0,0],1,0,350).x<.15);
 });
 
-test('rotation validates the actual target volume without shifting the character or locking retreat',()=>{
+test('rotation validates the actual target volume without shifting the character or locking retreat',{skip:'ARP-004I: post-1.1.5 physics retired; preserved in Git history'},()=>{
  const s=posedSystem();s.setCharacter('nori',.4,[0,0,0]);for(const t of [0,125,250])sideWall(s.map,.15,s.volume.height,t);
  assert.equal(s.requestPose(-Math.PI/2,false,300),false);near(s.poseYaw,0);near(s.position[0],0);
  assert.ok(s.move([0,0,0],-.15,0,320).x<-.14);assert.equal(s.requestPose(-Math.PI/2,false,330),true);near(s.poseYaw,-Math.PI/2);
@@ -113,7 +113,7 @@ test('continuous pressure stays at contact, retreat and sliding remain possible'
  const slide={...s.move(p,.02,.2,550)};assert.ok(slide.z>.199);assert.ok(s.move(p,-.1,0,560).x<p[0]-.099);
 });
 
-test('oriented narrow phase still catches a small low obstacle and leaves an adjacent path free',()=>{
+test('oriented narrow phase still catches a small low obstacle and leaves an adjacent path free',{skip:'ARP-004I: post-1.1.5 physics retired; preserved in Git history'},()=>{
  const s=posedSystem(.66);for(const t of [0,125,250]){s.map.begin(t,[0,0,0],s.volume.height);s.map.observe(.45,.08,0);}
  const r={...s.move([0,0,0],1,0,300)};assert.ok(s.blocked&&r.x<.45);
  const free=s.move([0,0,.4],1,0,310);assert.ok(free.x>.99);
@@ -121,7 +121,7 @@ test('oriented narrow phase still catches a small low obstacle and leaves an adj
 
 test('placement detects known overlap, permits relief and does not manufacture a global lock',()=>{
  const s=posedSystem();for(const t of [0,125,250])wall(s.map,-.085,t);s.validatePlacement(300);assert.equal(s.placementState,'occupied');near(s.position[2],0);
- const outward={...s.move([0,0,0],0,.2,310)};assert.ok(outward.z>.19);assert.equal(s.placementState,'no-known-overlap');
+ const outward={...s.move([0,0,0],0,.2,310)};assert.ok(outward.z>.19);s.validatePlacement(310);assert.equal(s.placementState,'no-known-overlap');
  s.place([0,-.7,0]);assert.equal(s.map.cells.size,0);assert.equal(s.contact,null);assert.equal(s.placementState,'waiting-for-data');near(s.volume.ground,-.7);
  assert.ok(s.move([0,-.7,0],.1,0,320).x>.099);
 });
@@ -138,7 +138,7 @@ test('same reference suspension preserves memory; new session and reference rese
 
 test('lifecycle log is bounded and anonymised; fresh placements replace old-generation state',()=>{
  const s=posedSystem();for(let i=0;i<30;i++){s.setVisibility('hidden');s.setVisibility('visible');}
- let saved=JSON.parse(s.exportText());assert.ok(saved.state.lifecycle.length<=16);assert.equal(saved.version,'1.1.7');
+ let saved=JSON.parse(s.exportText());assert.ok(saved.state.lifecycle.length<=16);assert.equal(saved.version,'1.1.8');
  assert.ok(!s.archive.text().includes('previousX'));s.place([1,-1,2]);saved=JSON.parse(s.exportText());assert.equal(saved.mapGeneration,s.mapGeneration);assert.equal(saved.state.placementState,'waiting-for-data');assert.equal(saved.lastBlock,null);
 });
 
@@ -148,7 +148,7 @@ test('turning collisions off preserves conventional displacement and clears live
 });
 
 
-test('3D debug displays the rotated body enclosure and legacy cap actually used by the query',()=>{
+test('3D debug displays the rotated body enclosure and legacy cap actually used by the query',{skip:'ARP-004I: post-1.1.5 physics retired; preserved in Git history'},()=>{
  const s=posedSystem();s.requestPose(Math.PI/2,false,300);s.debug3D=true;
  const d=new SpatialDebug({releaseDebug(){},drawDebug(){}},()=>0);d.prepare(s,300);
  assert.equal(d.groups[4].count,1536);assert.equal(d.data.byteLength,144000);assert.ok(d.count<=6000);

@@ -34,17 +34,17 @@ if not base_url:
   def log_message(self,*args):pass
  server=ThreadingHTTPServer(('localhost',0),partial(PagesHandler,directory=staging.name))
  Thread(target=server.serve_forever,daemon=True).start()
- base_url=f'http://localhost:{server.server_port}/ar-play/'
+ base_url=f'http://127.0.0.1:{server.server_port}/ar-play/'
 base_url=base_url.rstrip('/')+'/'
 try:
- resources={'':'text/html','index.html':'text/html','style.css':'text/css','manifest.webmanifest':'application/manifest+json','sw.js':'javascript','src/app.js':'javascript','src/depth.js':'javascript','src/spatial-map.js':'javascript','src/collision.js':'javascript','src/movement-probe.js':'javascript','src/body-profiles.js':'javascript','src/volume.js':'javascript','src/spatial-debug.js':'javascript','src/revalidation.js':'javascript','src/diagnostics.js':'javascript','src/math.js':'javascript','src/engine.js':'javascript','icons/icon-192.png':'image/png','icons/icon-512.png':'image/png'}
+ resources={'':'text/html','index.html':'text/html','style.css':'text/css','manifest.webmanifest':'application/manifest+json','sw.js':'javascript','src/boot.js':'javascript','src/build.js':'javascript','src/pwa.js':'javascript','src/app.js':'javascript','src/depth.js':'javascript','src/spatial-map.js':'javascript','src/collision.js':'javascript','src/movement-probe.js':'javascript','src/volume.js':'javascript','src/spatial-debug.js':'javascript','src/revalidation.js':'javascript','src/diagnostics.js':'javascript','src/math.js':'javascript','src/engine.js':'javascript','icons/icon-192.png':'image/png','icons/icon-512.png':'image/png'}
  for name,mime in resources.items():
   with urlopen(base_url+name,timeout=30) as response:
    assert response.status==200,(name,response.status)
    assert mime in response.headers.get('Content-Type',''),(name,response.headers)
    assert response.read(),name
- print('PASS HTTP 200 and MIME types for all 19 public routes',base_url)
- for name in ['server.mjs','package.json','tests/browser_test.py','tests/app.test.js','tests/depth.test.js','tests/spatial.test.js','tests/collision.test.js','tests/hybrid.test.js','tests/refinement.test.js','tests/directional.test.js','tests/spatial-debug.test.js','tests/memory.test.js','tests/oriented.test.js','tests/recovery.test.js','tests/collision-sequences.mjs','tests/recovery_compare.mjs','tests/recovery_benchmark.mjs','tests/revalidation-recovery.test.js','tests/revalidation-sequences.mjs','tests/fixtures/recovery-v115.json','tests/generate_body_profiles.mjs','tests/volume_benchmark.mjs','tests/contact.test.js','tests/memory_benchmark.mjs','tests/spatial_benchmark.mjs','tests/xr_fixture.js','reports/report.md','reports/','README.md','CHANGELOG.md','TESTES.txt','iniciar.bat','.github/workflows/deploy-pages.yml','.git/config','.env']:
+ print('PASS HTTP 200 and MIME types for all public routes',base_url)
+ for name in ['src/body-profiles.js','server.mjs','package.json','tests/browser_test.py','tests/app.test.js','tests/depth.test.js','tests/spatial.test.js','tests/collision.test.js','tests/hybrid.test.js','tests/refinement.test.js','tests/directional.test.js','tests/spatial-debug.test.js','tests/memory.test.js','tests/oriented.test.js','tests/chain.test.js','tests/chain-fixtures.mjs','tests/chain-compare.mjs','tests/pwa.test.js','tests/pwa_browser.py','tests/fixtures/chain-v115.json','tests/fixtures/legacy-workers.json','tests/recovery.test.js','tests/collision-sequences.mjs','tests/recovery_compare.mjs','tests/recovery_benchmark.mjs','tests/revalidation-recovery.test.js','tests/revalidation-sequences.mjs','tests/fixtures/recovery-v115.json','tests/generate_body_profiles.mjs','tests/volume_benchmark.mjs','tests/contact.test.js','tests/memory_benchmark.mjs','tests/spatial_benchmark.mjs','tests/xr_fixture.js','reports/report.md','reports/','README.md','CHANGELOG.md','TESTES.txt','iniciar.bat','.github/workflows/deploy-pages.yml','.git/config','.env']:
   try:
    with urlopen(base_url+name,timeout=30) as response:raise AssertionError(f'Private file exposed: {name} ({response.status})')
   except HTTPError as error:assert error.code==404,(name,error.code)
@@ -65,7 +65,7 @@ try:
   print('PASS all characters')
   page.locator('#dance').click();assert state()['dancing'];page.locator('#rotate').click();assert state()['yaw']!=0;page.locator('#size').fill('140');assert state()['scale']==1.4;page.locator('#jump').click();print('PASS actions and scale')
   j=page.locator('#joystick').bounding_box();page.mouse.move(j['x']+j['width']*.5,j['y']+j['height']*.5);page.mouse.down();page.mouse.move(j['x']+j['width']*.83,j['y']+j['height']*.5);page.wait_for_timeout(650);page.mouse.up();assert state()['pos'][0]>0;page.locator('#reset').click();assert state()['pos']==[0,0,0];print('PASS joystick and reset')
-  page.locator('#cam').click();page.wait_for_function("window.__arplay.state().mode === 'camera'");assert state()['streamActive'];page.wait_for_function('document.querySelector("video").readyState >= 2');print('PASS simulated camera')
+  page.locator('#cam').click();page.wait_for_function("window.__arplay.state().mode === 'camera'");assert state()['streamActive'];assert page.locator('#appVersion').is_visible();page.wait_for_function('document.querySelector("video").readyState >= 2');print('PASS simulated camera')
   with page.expect_download() as d:page.locator('#photo').click()
   photo=d.value.path();assert Path(photo).read_bytes().startswith(b'\x89PNG');assert Path(photo).stat().st_size>1000;print('PASS PNG',Path(photo).stat().st_size,'bytes')
   page.locator('#record').click();page.wait_for_timeout(1800);assert state()['recording']
@@ -82,14 +82,14 @@ try:
   for message in console_errors:print('INFO expected desktop WebXR diagnostic:',message)
   console_errors.clear()
   print('PASS camera release and unsupported XR fallback')
-  page.locator('#help').click();assert page.locator('dialog').is_visible();page.locator('#closeDialog').click();print('PASS help')
+  page.locator('#help').click();assert page.locator('dialog').is_visible();assert page.evaluate('window.__arplay.build().revision') in page.locator('#dialogBody').inner_text();page.locator('#closeDialog').click();print('PASS help')
   page.evaluate('navigator.serviceWorker.ready');page.wait_for_function('navigator.serviceWorker.controller !== null')
   assert page.evaluate('(async () => (await navigator.serviceWorker.ready).scope)()')==base_url
   version=json.loads((ROOT/'package.json').read_text(encoding='utf-8'))['version']
-  cache=re.search(r"const CACHE='([^']+)'",(ROOT/'sw.js').read_text(encoding='utf-8')).group(1)
+  build=page.evaluate('window.__arplay.build()');cache=build['cache'];assert build['version']==version and build['revision'];assert page.locator('#appVersion').inner_text()=='v'+version
   assert re.fullmatch(r'ar-play-v'+re.escape(version)+r'(-r[1-9][0-9]*)?',cache),cache
   assert page.evaluate('caches.keys()')==[cache]
-  assert page.evaluate('(async () => (await (await caches.open("'+cache+'")).keys()).length)()')==18
+  assert page.evaluate('(async () => (await (await caches.open("'+cache+'")).keys()).length)()')==20
   print('PASS service worker scope and versioned cache')
   context.set_offline(True);page.reload();page.wait_for_function('window.__arplay?.state().frameCount > 2');print('PASS offline reload')
   for char in ['nori','luma','bip']:
@@ -153,7 +153,7 @@ try:
   assert not ar.locator('#collisionToggle').is_checked();assert ar.locator('#depthPanel').is_hidden()
   ar.locator('#collisionToggle').check()
   ar.wait_for_function('window.__arplay.spatial().occupied > 0',timeout=15000)
-  assert ar.locator('#depthPanel').is_hidden();assert ar.evaluate('window.__xrTest.reads')>0
+  assert ar.locator('#appVersion').is_visible();assert ar.locator('#depthPanel').is_hidden();assert ar.evaluate('window.__xrTest.reads')>0
   assert ar.evaluate('window.__arplay.spatial().volumeMode')=='legacy-circular'
   start=ar.evaluate('window.__arplay.state().pos')
   ar.locator('#joystick').focus();ar.keyboard.down('ArrowUp');ar.wait_for_timeout(2500)
@@ -233,7 +233,9 @@ try:
   probe_stop=hybrid.evaluate('window.__arplay.state().pos[2]');assert -2+.42*.771+.04-.01 < probe_stop < -1.4,probe_stop # legacy circular Bip envelope, unchanged margins
   assert hybrid.evaluate('window.__arplay.spatial().coverageInsufficient') is True
   hybrid.keyboard.up('ArrowUp');hybrid.locator('#joystick').focus();hybrid.keyboard.down('ArrowDown')
-  hybrid.wait_for_timeout(200);hybrid.keyboard.up('ArrowDown')
+  hybrid.wait_for_timeout(200)
+  print('RETREAT_200MS_OBSERVATION',hybrid.evaluate('window.__arplay.state().pos[2]')-probe_stop,flush=True)
+  hybrid.wait_for_function('(stop)=>window.__arplay.state().pos[2] > stop+.025',arg=probe_stop,timeout=2000);hybrid.keyboard.up('ArrowDown')
   assert hybrid.evaluate('window.__arplay.state().pos[2]') > probe_stop+.025
   hybrid.locator('#depthToggle').click()
   hybrid.wait_for_function('document.querySelector("#collisionReadout").textContent.includes("Custo da sonda")')
@@ -308,7 +310,7 @@ try:
   recovery.wait_for_function('window.__arplay.spatial().blocked',timeout=15000);recovery.keyboard.up('ArrowUp')
   recovery.locator('#demo').click();recovery.wait_for_function("window.__arplay.state().mode === 'demo'")
   assert recovery.evaluate('window.__arplay.spatial().cells')==0
-  saved=recovery.evaluate('window.__arplay.archive()');assert any(e['kind']=='suspended' for e in saved['state']['lifecycle']);assert any(e['kind']=='resumed' for e in saved['state']['lifecycle']);assert saved['lastBlock'] and saved['version']=='1.1.7'
+  saved=recovery.evaluate('window.__arplay.archive()');assert any(e['kind']=='suspended' for e in saved['state']['lifecycle']);assert any(e['kind']=='resumed' for e in saved['state']['lifecycle']);assert saved['lastBlock'] and saved['version']=='1.1.8'
   assert 0<len(saved['state']['blockedCells'])<=8;assert all('freeEvidence' in c and 'reason' in c and 'key' not in c for c in saved['state']['blockedCells']);assert saved['reason']=='mode-change';assert 'previousX' not in saved['lastBlock'];assert saved['session']=='AR-1'
   recovery.locator('#lastDiagnostic').click();assert recovery.locator('#archiveText').inner_text()
   recovery.evaluate("Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async()=>{throw new Error('simulated permission denial')}}})")
@@ -323,6 +325,9 @@ try:
   assert recovery.evaluate('window.__arplay.spatial().session')=='AR-2';assert recovery.evaluate('window.__arplay.spatial().cells')==0
   recovery.locator('#demo').click();assert not recovery_errors,recovery_errors;recovery.close()
   print('PASS SIMULATED lifecycle and diagnostic recovery: same-reference suspension, end cleanup, anonymous archive, failed clipboard, local export and session isolation')
+  from pwa_browser import run_updates, repeated_retreat
+  repeated_retreat(simulated,base_url)
+  run_updates(browser,ROOT)
   simulated.close();browser.close()
 finally:
  if server:server.shutdown();server.server_close()
