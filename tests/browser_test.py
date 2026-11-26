@@ -248,18 +248,19 @@ try:
   regression.wait_for_function('window.__xrTest.hitReady');regression.evaluate('window.__xrTest.place()')
   regression.locator('#size').fill('81');regression.locator('#collisionToggle').check()
   regression.wait_for_function('window.__arplay.spatial().scale === .81 && window.__arplay.spatial().occupied > 0')
+  regression.evaluate('window.__xrTest.manualFrames=true');regression.wait_for_function('!!window.__xrTest.pending')
   import math
   for heading in [0,math.pi/2,math.pi,-math.pi/2]:
-   regression.evaluate('(yaw)=>window.__xrTest.cameraYaw=yaw',heading);regression.wait_for_timeout(150)
+   regression.evaluate('(yaw)=>window.__xrTest.cameraYaw=yaw',heading);regression.evaluate('window.__xrTest.step(2)')
    start=regression.evaluate('window.__arplay.state().pos');regression.locator('#joystick').focus()
-   regression.keyboard.down('ArrowUp');regression.wait_for_timeout(350);regression.keyboard.up('ArrowUp')
+   regression.keyboard.down('ArrowUp');regression.evaluate('window.__xrTest.step(24)');regression.keyboard.up('ArrowUp')
    finish=regression.evaluate('window.__arplay.state().pos')
    advance=(finish[0]-start[0])*(-math.sin(heading))+(finish[2]-start[2])*(-math.cos(heading))
-   assert advance>.04,(heading,start,finish)
+   assert abs(advance-.55*.016*24)<1e-5,(heading,start,finish)
    s=regression.evaluate('window.__arplay.spatial()');assert s['posePending'] is False
    assert abs(s['requestedYaw']-s['volumeYaw'])<1e-6
-   regression.wait_for_timeout(150);rest=regression.evaluate('window.__arplay.state().pos')
-   regression.wait_for_timeout(200);assert regression.evaluate('window.__arplay.state().pos')==rest
+   regression.evaluate('window.__xrTest.step(2)');rest=regression.evaluate('window.__arplay.state().pos')
+   regression.evaluate('window.__xrTest.step(12)');assert regression.evaluate('window.__arplay.state().pos')==rest
   regression.locator('#demo').click();assert not regression_errors,regression_errors;regression.close()
   print('PASS ARP-004H SIMULATED Bip 81%: sustained movement, rapid direction changes, camera headings, adopted yaw and rest')
   memory=simulated.new_page();memory_errors=[];memory.on('pageerror',lambda error:memory_errors.append(str(error)))

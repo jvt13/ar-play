@@ -70,6 +70,7 @@
           requestAnimationFrame(time => {
             if (this.ended) return;
             test.active = true;
+            test.clock=time;
             try { callback(time, new FakeFrame(this)); } finally { test.active = false; }
           });
         },
