@@ -1,4 +1,4 @@
-# AR Play — v1.1.5 (MVP)
+# AR Play — v1.1.6 (MVP)
 
 Aplicativo web de personagens 3D interativos, inspirado na experiência de câmera com efeitos de realidade aumentada. Não é uma reprodução do TikTok. Os três personagens (Bip, Nori e Luma) são construídos proceduralmente, sem baixar modelos ou usar ativos proprietários.
 
@@ -40,13 +40,27 @@ A câmera, renderização e gravação são processadas localmente. O app não e
 
 ## Testes
 
-`npm test`: 127 testes, incluindo reconstrução 3D, projeções assimétricas, chão, confirmação/expiração, cobertura desconhecida, paredes/móveis, posições efetivas, recuo, deslizamento, escala e limpeza. A correção 1.1.1 acrescenta bloqueio imediato com mapa parcial, persistência lateral, liberação confiável, limites geométricos do contato e saída de sobreposição. A expiração de ocupação descarta votos livres fracos anteriores e retorna a desconhecido. O cache atual é `ar-play-v1.1.5-r2`. `npm run check` valida a sintaxe JavaScript. Geometria e sessões automatizadas são sintéticas; a suíte de navegador também verifica a integração XR simulada, a sonda com diagnóstico fechado e a preservação dos modos existentes.
+`npm test`: 143 testes, incluindo reconstrução 3D, projeções assimétricas, chão, confirmação/expiração, cobertura desconhecida, paredes/móveis, posições efetivas, recuo, deslizamento, escala e limpeza. A correção 1.1.1 acrescenta bloqueio imediato com mapa parcial, persistência lateral, liberação confiável, limites geométricos do contato e saída de sobreposição. A expiração de ocupação descarta votos livres fracos anteriores e retorna a desconhecido. O cache atual é `ar-play-v1.1.6`. `npm run check` valida a sintaxe JavaScript. Geometria e sessões automatizadas são sintéticas; a suíte de navegador também verifica a integração XR simulada, a sonda com diagnóstico fechado e a preservação dos modos existentes.
 
 Benchmark CPU opcional: `node tests/spatial_benchmark.mjs`. Usa geometria sintética, informa ambiente, mediana, p95 e máximos; não mede sensor, câmera ou desempenho no celular.
 
 Suíte de navegador: instale Python 3.12+, Playwright (`python -m pip install playwright==1.63.0`) e Chromium (`python -m playwright install chromium`). Execute `python tests/browser_test.py`. Ajuste a variável `CHROMIUM` com o caminho de um Chrome/Chromium instalado, se necessário. O teste usa câmera simulada e hospeda somente os arquivos públicos em um diretório temporário sob `/ar-play/`, com porta livre. `PREVIEW` permite salvar capturas; `BASE_URL` permite verificar a URL HTTPS publicada em vez do servidor temporário. Essas ferramentas são exclusivas de teste; o aplicativo continua sem dependências de execução. O WebXR real não é coberto por essa suíte.
 
 Câmera física, sensores, instalação no Android e ARCore exigem validação no aparelho. Os testes de navegador usam câmera simulada e não homologam WebXR/ARCore.
+
+## Volume orientado e posicionamento — 1.1.6
+
+Repouso e caminhada agora compartilham um envelope por orientação, em 12 faixas de altura, derivado das transformações dos modelos inalterados. `src/body-profiles.js` contém limites pré-calculados; `src/volume.js` consulta eixos separadores entre esse corpo, os limites medidos do mapa e os segmentos da sonda. O envelope circular anterior continua limitando a consulta e é usado integralmente na dança. Margem de 2,5 cm, pele de 1,5 cm, retenção de 45 s e memória da sonda de 900 ms permanecem. Não há redução arbitrária do corpo nem ajuste da altura pelo sensor.
+
+O giro e a expansão para dança verificam o espaço conhecido antes de mudar o volume. Próximo a um obstáculo, a orientação pode aguardar espaço; afaste-se ou repita a dança. O controle continua relativo à câmera e pode recuar/deslizar usando a pose atual. Pulo preserva a proteção horizontal no apoio. A visualização azul mostra os dois limites consultados (caixa orientada e círculo legado por faixa); a região física é limitada por ambos, e essas linhas não são uma malha do personagem.
+
+Em um corredor diagonal, quando os dois eixos separados estão bloqueados mas parte do vetor original está livre, o resolvedor permite essa parte até contato. O diagnóstico distingue a fonte/etapa da última subconsulta rejeitada do contato representativo na posição final: penetrações desses contatos diferentes não devem ser subtraídas. O raio geral é o envelope de busca; o apoio direcional do contato é registrado separadamente.
+
+Posicionamento adota imediatamente a altura do hit-test. Novas evidências podem indicar **Posição sobreposta: afaste-se ou reposicione**, sem teletransporte ou imunidade. Reposicionar limpa o mapa dependente do apoio; uma nova sessão começa vazia. Contato/mensagem antigos são limpos imediatamente ao mudar a geração. O diagnóstico recuperável inclui até 16 eventos de início, posicionamento, suspensão/retomada e limpeza, identificados por sessão/geração, sem coordenadas absolutas. Alterações de personagem/escala podem criar sobreposição: afaste-se ou reposicione.
+
+Células bloqueantes continuam priorizadas para revalidação. O texto informa visibilidade da pegada, amostras coerentes/distintas e idade da última consulta. Pegada parcialmente fora da vista não é liberada por observar apenas o centro. Observe centro e bordas da região antiga por várias atualizações; dados insuficientes/oclusão preservam ocupação válida. Isso não certifica a precisão física nem identifica automaticamente obstáculos fantasmas.
+
+Homologação física da **1.1.6 pendente**. Compare os três personagens em 40%, 54%, 66% e 100%, giros, caminhada, dança, pulo, recuo/deslizamento e objetos pequenos. Teste suspensão/retorno na mesma sessão, saída/novo AR e reposicionamento. Após um bloqueio suspeito, solte o joystick e copie/exporte o diagnóstico antes de recarregar. Benchmarks CPU sintéticos: `node --expose-gc tests/spatial_benchmark.mjs`, `node --expose-gc tests/memory_benchmark.mjs` e `node tests/volume_benchmark.mjs`; não garantem desempenho Android.
 
 ## Contato e recuperação do diagnóstico — 1.1.5
 

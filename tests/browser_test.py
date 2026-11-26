@@ -37,14 +37,14 @@ if not base_url:
  base_url=f'http://localhost:{server.server_port}/ar-play/'
 base_url=base_url.rstrip('/')+'/'
 try:
- resources={'':'text/html','index.html':'text/html','style.css':'text/css','manifest.webmanifest':'application/manifest+json','sw.js':'javascript','src/app.js':'javascript','src/depth.js':'javascript','src/spatial-map.js':'javascript','src/collision.js':'javascript','src/movement-probe.js':'javascript','src/volume.js':'javascript','src/spatial-debug.js':'javascript','src/revalidation.js':'javascript','src/diagnostics.js':'javascript','src/math.js':'javascript','src/engine.js':'javascript','icons/icon-192.png':'image/png','icons/icon-512.png':'image/png'}
+ resources={'':'text/html','index.html':'text/html','style.css':'text/css','manifest.webmanifest':'application/manifest+json','sw.js':'javascript','src/app.js':'javascript','src/depth.js':'javascript','src/spatial-map.js':'javascript','src/collision.js':'javascript','src/movement-probe.js':'javascript','src/body-profiles.js':'javascript','src/volume.js':'javascript','src/spatial-debug.js':'javascript','src/revalidation.js':'javascript','src/diagnostics.js':'javascript','src/math.js':'javascript','src/engine.js':'javascript','icons/icon-192.png':'image/png','icons/icon-512.png':'image/png'}
  for name,mime in resources.items():
   with urlopen(base_url+name,timeout=30) as response:
    assert response.status==200,(name,response.status)
    assert mime in response.headers.get('Content-Type',''),(name,response.headers)
    assert response.read(),name
- print('PASS HTTP 200 and MIME types for all 18 public routes',base_url)
- for name in ['server.mjs','package.json','tests/browser_test.py','tests/app.test.js','tests/depth.test.js','tests/spatial.test.js','tests/collision.test.js','tests/hybrid.test.js','tests/refinement.test.js','tests/directional.test.js','tests/spatial-debug.test.js','tests/memory.test.js','tests/contact.test.js','tests/memory_benchmark.mjs','tests/spatial_benchmark.mjs','tests/xr_fixture.js','reports/report.md','reports/','README.md','CHANGELOG.md','TESTES.txt','iniciar.bat','.github/workflows/deploy-pages.yml','.git/config','.env']:
+ print('PASS HTTP 200 and MIME types for all 19 public routes',base_url)
+ for name in ['server.mjs','package.json','tests/browser_test.py','tests/app.test.js','tests/depth.test.js','tests/spatial.test.js','tests/collision.test.js','tests/hybrid.test.js','tests/refinement.test.js','tests/directional.test.js','tests/spatial-debug.test.js','tests/memory.test.js','tests/oriented.test.js','tests/generate_body_profiles.mjs','tests/volume_benchmark.mjs','tests/contact.test.js','tests/memory_benchmark.mjs','tests/spatial_benchmark.mjs','tests/xr_fixture.js','reports/report.md','reports/','README.md','CHANGELOG.md','TESTES.txt','iniciar.bat','.github/workflows/deploy-pages.yml','.git/config','.env']:
   try:
    with urlopen(base_url+name,timeout=30) as response:raise AssertionError(f'Private file exposed: {name} ({response.status})')
   except HTTPError as error:assert error.code==404,(name,error.code)
@@ -89,7 +89,7 @@ try:
   cache=re.search(r"const CACHE='([^']+)'",(ROOT/'sw.js').read_text(encoding='utf-8')).group(1)
   assert re.fullmatch(r'ar-play-v'+re.escape(version)+r'(-r[1-9][0-9]*)?',cache),cache
   assert page.evaluate('caches.keys()')==[cache]
-  assert page.evaluate('(async () => (await (await caches.open("'+cache+'")).keys()).length)()')==17
+  assert page.evaluate('(async () => (await (await caches.open("'+cache+'")).keys()).length)()')==18
   print('PASS service worker scope and versioned cache')
   context.set_offline(True);page.reload();page.wait_for_function('window.__arplay?.state().frameCount > 2');print('PASS offline reload')
   for char in ['nori','luma','bip']:
@@ -154,6 +154,7 @@ try:
   ar.locator('#collisionToggle').check()
   ar.wait_for_function('window.__arplay.spatial().occupied > 0',timeout=15000)
   assert ar.locator('#depthPanel').is_hidden();assert ar.evaluate('window.__xrTest.reads')>0
+  assert ar.evaluate('window.__arplay.spatial().volumeMode')=='oriented-walk'
   start=ar.evaluate('window.__arplay.state().pos')
   ar.locator('#joystick').focus();ar.keyboard.down('ArrowUp');ar.wait_for_timeout(2500)
   ar.wait_for_function('window.__arplay.spatial().blocked',timeout=15000)
@@ -224,7 +225,7 @@ try:
   assert hybrid.evaluate('window.__arplay.spatial().occupied')==0
   assert hybrid.locator('#depthPanel').is_hidden()
   hybrid.wait_for_function('window.__arplay.spatial().blockSource === "sonda imediata"',timeout=10000)
-  probe_stop=hybrid.evaluate('window.__arplay.state().pos[2]');assert -1.7 < probe_stop < -1.4,probe_stop
+  probe_stop=hybrid.evaluate('window.__arplay.state().pos[2]');assert -2+.42*.511+.04-.01 < probe_stop < -1.4,probe_stop # oriented Bip forward extent, unchanged margins
   assert hybrid.evaluate('window.__arplay.spatial().coverageInsufficient') is True
   hybrid.keyboard.up('ArrowUp');hybrid.locator('#joystick').focus();hybrid.keyboard.down('ArrowDown')
   hybrid.wait_for_timeout(200);hybrid.keyboard.up('ArrowDown')
@@ -277,11 +278,12 @@ try:
   assert recovery.evaluate('window.__arplay.state().pos')==origin
   recovery.evaluate("window.__xrTest.poseMissing=false;window.__xrTest.visibility('visible')")
   recovery.wait_for_function('!window.__arplay.spatial().suspended');assert recovery.evaluate('window.__arplay.spatial().occupied')>0
+  recovery.evaluate('window.__xrTest.maxDepthReads=window.__xrTest.reads');recovery.wait_for_timeout(1100)
   recovery.locator('#joystick').focus();recovery.keyboard.down('ArrowUp')
   recovery.wait_for_function('window.__arplay.spatial().blocked',timeout=15000);recovery.keyboard.up('ArrowUp')
   recovery.locator('#demo').click();recovery.wait_for_function("window.__arplay.state().mode === 'demo'")
   assert recovery.evaluate('window.__arplay.spatial().cells')==0
-  saved=recovery.evaluate('window.__arplay.archive()');assert saved['lastBlock'] and saved['version']=='1.1.5'
+  saved=recovery.evaluate('window.__arplay.archive()');assert any(e['kind']=='suspended' for e in saved['state']['lifecycle']);assert any(e['kind']=='resumed' for e in saved['state']['lifecycle']);assert saved['lastBlock'] and saved['version']=='1.1.6'
   assert 0<len(saved['state']['blockedCells'])<=8;assert all('freeEvidence' in c and 'reason' in c and 'key' not in c for c in saved['state']['blockedCells']);assert saved['reason']=='mode-change';assert 'previousX' not in saved['lastBlock'];assert saved['session']=='AR-1'
   recovery.locator('#lastDiagnostic').click();assert recovery.locator('#archiveText').inner_text()
   recovery.evaluate("Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async()=>{throw new Error('simulated permission denial')}}})")

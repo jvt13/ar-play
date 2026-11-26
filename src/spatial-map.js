@@ -1,4 +1,4 @@
-import {radiusAt} from './volume.js';
+import {radiusAt,supportAt,orientedDepth} from './volume.js';
 import {invert4} from './math.js';
 
 export const SPATIAL_CONFIG = Object.freeze({
@@ -243,14 +243,14 @@ export class SpatialMap {
     for(let i=0;i<this.blockCellCount;i++){
       const cell=this.lastBlockCells[i];if(this.cells.get(cell.key)!==cell||!this.valid(cell,time))continue;
       const minX=cell.refineAxis===0?cell.contactMin:cell.minX,maxX=cell.refineAxis===0?cell.contactMax:cell.maxX,minZ=cell.refineAxis===2?cell.contactMin:cell.minZ,maxZ=cell.refineAxis===2?cell.contactMax:cell.maxZ;
-      const px=Math.max(minX,Math.min(maxX,x)),pz=Math.max(minZ,Math.min(maxZ,z)),distance=Math.hypot(x-px,z-pz),radius=radiusAt(volume,cell.minY,cell.maxY),gap=distance-radius;
+      const px=Math.max(minX,Math.min(maxX,x)),pz=Math.max(minZ,Math.min(maxZ,z)),distance=Math.hypot(x-px,z-pz),radius=supportAt(volume,cell.minY,cell.maxY,px-x,pz-z),gap=distance-radius;
       if(gap<best){best=gap;chosen=cell;Object.assign(this.contactSummary,{cellId:cell.id,surfaceDistance:distance,volumeRadius:radius,clearance:gap,pointMargin:this.config.pointMargin,skin,ageMs:time-cell.time,state:this.memoryState(cell,time),visibility:cell.visibility,freeEvidence:cell.freeHits,reason:cell.revalidationReason??null,refined:cell.refineAxis>=0});this.contactPoint[0]=px;this.contactPoint[1]=(cell.minY+cell.maxY)/2;this.contactPoint[2]=pz;}
     }
     this.lastContactCell=chosen;return chosen?this.contactSummary:null;
   }
   blockedDetails(time){
     const out=[];
-    for(let i=0;i<this.blockCellCount;i++){const cell=this.lastBlockCells[i];out.push({id:cell.id,state:this.cells.get(cell.key)===cell?this.memoryState(cell,time):'removed',ageMs:Math.max(0,time-cell.time),freeEvidence:cell.freeHits,reason:cell.removalReason||cell.revalidationReason||cell.visibility||'indisponível',refined:cell.refineAxis>=0});}
+    for(let i=0;i<this.blockCellCount;i++){const cell=this.lastBlockCells[i];out.push({id:cell.id,state:this.cells.get(cell.key)===cell?this.memoryState(cell,time):'removed',ageMs:Math.max(0,time-cell.time),freeEvidence:cell.freeHits,reason:cell.removalReason||cell.revalidationReason||cell.visibility||'indisponível',refined:cell.refineAxis>=0,footprintVisible:cell.footprintVisible??null,revalidationSamples:cell.revalidationSamples??null,revalidationDistinct:cell.revalidationDistinct??null,lastCheckAgeMs:Number.isFinite(cell.lastCheck)?Math.max(0,time-cell.lastCheck):null});}
     return out;
   }
   noteBlocked(x,z,volume,time,skin) {
@@ -368,30 +368,31 @@ export class SpatialMap {
           const ex = Math.max(ax - x, 0, x - bx), ez = Math.max(az - z, 0, z - bz);
           const distance = Math.hypot(ex, ez);
           const inside = !distance ? Math.min(x - ax, bx - x, z - az, bz - z) : 0;
-          const depth = radiusAt(volume,cell.minY,cell.maxY) + skin - distance + inside;
+          const nx=Math.max(ax,Math.min(bx,x))-x,nz=Math.max(az,Math.min(bz,z))-z;
+          const depth = volume.bodyBounds?orientedDepth(volume,cell.minY,cell.maxY,x,z,(ax+bx)/2,(az+bz)/2,(bx-ax)/2,(bz-az)/2,skin):radiusAt(volume,cell.minY,cell.maxY) + skin - distance + inside;
           if(this.captureBlock && depth>0){
             cell.lastBlocked=time;
             let found=false;for(let k=0;k<this.currentBlockCount;k++)if(this.currentBlockCells[k]===cell)found=true;
             if(!found&&this.currentBlockCount<8)this.currentBlockCells[this.currentBlockCount++]=cell;
-            this.lastSurfaceDistance=Math.hypot(Math.max(minX-x,0,x-maxX),Math.max(minZ-z,0,z-maxZ));this.lastVolumeRadius=radiusAt(volume,cell.minY,cell.maxY);this.lastClearance=this.lastSurfaceDistance-this.lastVolumeRadius;this.lastContactCell=cell;
+            this.lastSurfaceDistance=Math.hypot(Math.max(minX-x,0,x-maxX),Math.max(minZ-z,0,z-maxZ));this.lastVolumeRadius=supportAt(volume,cell.minY,cell.maxY,nx,nz);this.lastClearance=this.lastSurfaceDistance-this.lastVolumeRadius;this.lastContactCell=cell;
           }
           if(this.motion && depth>0) {
             const ex0=Math.max(ax-this.fromX,0,this.fromX-bx),ez0=Math.max(az-this.fromZ,0,this.fromZ-bz);
             const distance0=Math.hypot(ex0,ez0),inside0=!distance0?Math.min(this.fromX-ax,bx-this.fromX,this.fromZ-az,bz-this.fromZ):0;
-            let before=radiusAt(volume,cell.minY,cell.maxY)+skin-distance0+inside0,after=depth;
+            let before=volume.bodyBounds?orientedDepth(volume,cell.minY,cell.maxY,this.fromX,this.fromZ,(ax+bx)/2,(az+bz)/2,(bx-ax)/2,(bz-az)/2,skin):radiusAt(volume,cell.minY,cell.maxY)+skin-distance0+inside0,after=depth;
             let crossing=false;
             if(cell.refineAxis>=0 || cell.planar && cell.span>1e-6) {
               // Signed distance to the measured local surface, allowing its tangent even
               // when the footprint starts overlapping several adjacent samples.
-              const r0=radiusAt(volume,cell.minY,cell.maxY)+skin+c.pointMargin;
+              const padding=skin+c.pointMargin;
               const fx=cell.refineAxis===0?(cell.contactMin+cell.contactMax)/2:cell.firstX,fz=cell.refineAxis===2?(cell.contactMin+cell.contactMax)/2:cell.firstZ,tx=cell.refineAxis===2?1:cell.refineAxis===0?0:cell.tangentX,tz=cell.refineAxis===0?1:cell.refineAxis===2?0:cell.tangentZ;
               const fromSide=(this.fromX-fx)*tz-(this.fromZ-fz)*tx,toSide=(x-fx)*tz-(z-fz)*tx;
               crossing=Math.abs(fromSide)>1e-8&&fromSide*toSide<0;
-              if(!this.escape){before=r0-Math.abs(fromSide);after=r0-Math.abs(toSide);}
+              if(!this.escape){before=supportAt(volume,cell.minY,cell.maxY,-Math.sign(fromSide)*tz,Math.sign(fromSide)*tx)+padding-Math.abs(fromSide);after=supportAt(volume,cell.minY,cell.maxY,-Math.sign(toSide)*tz,Math.sign(toSide)*tx)+padding-Math.abs(toSide);}
             }
             const gx=this.fromX-Math.max(cell.minX,Math.min(cell.maxX,this.fromX)),gz=this.fromZ-Math.max(cell.minZ,Math.min(cell.maxZ,this.fromZ));
             const closing=(cell.refineAxis<0&&(!cell.planar||cell.span<=1e-6))&&(gx*(x-this.fromX)+gz*(z-this.fromZ)) < -1e-10;
-            if(((crossing||closing)&&!this.interiorEscape) || (this.escape ? before<=0 : after>Math.max(0,before)+1e-8)){this.motionAllowed=false;this.motionReason=crossing?'crossed-contact-plane':closing?'closing-measured-contact':this.escape?'new-contact-during-escape':'contact-worsening';this.motionBefore=before;this.motionAfter=after;this.motionDistance=distance;}
+            if(((crossing||closing)&&!this.interiorEscape) || (this.escape ? before<=0 : after>Math.max(0,before)+1e-8)){this.motionAllowed=false;this.motionCellId=cell.id;this.motionReason=crossing?'crossed-contact-plane':closing?'closing-measured-contact':this.escape?'new-contact-during-escape':'contact-worsening';this.motionBefore=before;this.motionAfter=after;this.motionDistance=distance;}
           }
           overlap = Math.max(overlap, depth);
           if (depth > 0) this.contactTime = Math.max(this.contactTime, cell.time);

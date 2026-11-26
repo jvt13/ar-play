@@ -71,10 +71,11 @@ export class SpatialRevalidator {
         this.ids[i]=id;if(duplicate)continue;distinct++;
         if(d>=.15&&d<=6&&Math.abs(d-central)<=tolerance)valid++;
       }
+      cell.footprintVisible=geometry;cell.revalidationSamples=valid;cell.revalidationDistinct=distinct;
       if(!(central>=.15&&central<=6)||valid<3||distinct<3){cell.visibility='invalid';cell.revalidationReason='dados insuficientes';map.resetContrary(cell);this.invalid++;continue;}
       if(central<expected-tolerance){cell.visibility='occluded';cell.revalidationReason='superfície mais próxima';map.resetContrary(cell);map.occludedCount++;this.occluded++;continue;}
       if(!projector.point(u,v,central,this.point)){this.invalid++;continue;}
-      if((geometry&&beyond)||legacyFree){
+      if(geometry&&(beyond||legacyFree)){
         cell.revalidationReason=geometry&&beyond?'volume medido atravessado por raios livres':'liberação além da margem legada';
         // This ray passes through the measured centre (not merely an empty corner of its voxel).
         // Query neighbouring pixels above only for coherence; they cannot multiply votes.
@@ -86,7 +87,7 @@ export class SpatialRevalidator {
         const before=cell.time;
         map.observe(this.point[0],this.point[1],this.point[2],true);
         if(cell.time===time&&before!==time){this.refreshed++;}
-      } else {cell.visibility='ambiguous';cell.revalidationReason='evidência contraditória ou liberação parcial';map.resetContrary(cell);}
+      } else {cell.visibility='ambiguous';cell.revalidationReason=geometry?'evidência contraditória ou liberação parcial':'pegada parcialmente fora da vista';map.resetContrary(cell);}
     }
     this.costMs=Math.max(0,this.now()-started);
     if(this.costMs>2){this.budget=Math.max(2,this.budget-2);this.fast=0;}

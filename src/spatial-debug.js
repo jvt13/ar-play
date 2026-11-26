@@ -1,4 +1,4 @@
-import {radiusAt} from './volume.js';
+import {radiusAt,supportAt,orientedDepth} from './volume.js';
 
 // World-space data derived by the algorithm, never native XR resources.
 // A single interleaved position/normal buffer uses the Engine's existing VP/shaders.
@@ -70,19 +70,27 @@ export class SpatialDebug {
     for(let i=0;i<s.probe.count;i++){
       const j=i*7;if(time-h[j+3]>=900 || h[j+1]<=v.ground+c.floorTolerance || h[j+1]>=v.ground+v.height)continue;
       const dx=p[0]-h[j],dz=p[2]-h[j+2],along=Math.max(-h[j+6],Math.min(h[j+6],dx*h[j+4]+dz*h[j+5]));
-      if(Math.hypot(dx-along*h[j+4],dz-along*h[j+5])>=radiusAt(v,h[j+1])+s.resolver.skin+c.pointMargin)continue;
+      if(v.bodyBounds?orientedDepth(v,h[j+1],h[j+1],p[0],p[2],h[j],h[j+2],0,0,s.resolver.skin+c.pointMargin,h[j+4],h[j+5],h[j+6])<=0:Math.hypot(dx-along*h[j+4],dz-along*h[j+5])>=radiusAt(v,h[j+1])+s.resolver.skin+c.pointMargin)continue;
       this.line(h[j]-h[j+4]*h[j+6],h[j+1],h[j+2]-h[j+5]*h[j+6],h[j]+h[j+4]*h[j+6],h[j+1],h[j+2]+h[j+5]*h[j+6]);
       this.contactCount++;
     }
     this.end();this.begin(4);
     for(let band=0;band<12;band++){
       const low=v.ground+band*v.height/12,high=v.ground+(band+1)*v.height/12;
-      const r=radiusAt(v,(low+high)/2)+s.resolver.skin;
       for(let i=0;i<24;i++){
-        const a=i*Math.PI/12,b=(i+1)*Math.PI/12;
-        this.line(p[0]+Math.cos(a)*r,low,p[2]+Math.sin(a)*r,p[0]+Math.cos(b)*r,low,p[2]+Math.sin(b)*r);
-        this.line(p[0]+Math.cos(a)*r,high,p[2]+Math.sin(a)*r,p[0]+Math.cos(b)*r,high,p[2]+Math.sin(b)*r);
+        const a=i*Math.PI/12,b=(i+1)*Math.PI/12,r=radiusAt(v,(low+high)/2)+s.resolver.skin,q=r;
+        this.line(p[0]+Math.cos(a)*r,low,p[2]+Math.sin(a)*r,p[0]+Math.cos(b)*q,low,p[2]+Math.sin(b)*q);
+        this.line(p[0]+Math.cos(a)*r,high,p[2]+Math.sin(a)*r,p[0]+Math.cos(b)*q,high,p[2]+Math.sin(b)*q);
         if(i%6===0)this.line(p[0]+Math.cos(a)*r,low,p[2]+Math.sin(a)*r,p[0]+Math.cos(a)*r,high,p[2]+Math.sin(a)*r);
+      }
+      // Blue constraints of the same conservative query: old circle AND the
+      // orientation-dependent body box. They are enclosures, not a model mesh.
+      if(v.bodyBounds){const b=v.bodyBounds,j=band*4,k=s.resolver.skin;
+        for(let edge=0;edge<4;edge++){
+          const next=(edge+1)%4,ax=(edge===0||edge===3?b[j]*v.size-k:b[j+1]*v.size+k),az=(edge<2?b[j+2]*v.size-k:b[j+3]*v.size+k),bx=(next===0||next===3?b[j]*v.size-k:b[j+1]*v.size+k),bz=(next<2?b[j+2]*v.size-k:b[j+3]*v.size+k);
+          const x=p[0]+v.poseCos*ax+v.poseSin*az,z=p[2]-v.poseSin*ax+v.poseCos*az,a=p[0]+v.poseCos*bx+v.poseSin*bz,c=p[2]-v.poseSin*bx+v.poseCos*bz;
+          this.line(x,low,z,a,low,c);this.line(x,high,z,a,high,c);this.line(x,low,z,x,high,z);
+        }
       }
     }
     this.end();this.begin(5);

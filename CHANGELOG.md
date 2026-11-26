@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.6 — 2026-11-25
+
+- Envelope orientado de repouso/caminhada em 12 faixas, derivado dos modelos originais; separação por eixos, teto circular e fallback integral para dança. Giro/expansão consultam ocupações; modelos, margens e retenções preservados.
+- Avanço parcial em corredores diagonais sem passagem livre pelos eixos; proteção individual de contatos concorrentes, recuo e deslizamento mantidos.
+- Altura de apoio imediata, validação de sobreposição por evidência e limpeza imediata de contato/status entre gerações. Eventos de ciclo de vida limitados no diagnóstico recuperável.
+- Revalidação impede liberar pegada parcialmente fora da vista; visibilidade, amostras e idade de consulta das células bloqueantes expostas.
+- Diagnóstico separa última subconsulta rejeitada e contato representativo final. Depuração azul mostra limites orientados e circulares usados na consulta.
+- Cache ar-play-v1.1.6 com body-profiles.js, inventários e testes geométricos/lifecycle ampliados. Sem dependências de execução; homologação física pendente.
+
 ## 1.1.5 — 2026-11-25
 
 - Refinamento de contato por limites normais recentes de superfícies locais contínuas/coerentes e acabamento numérico de subpassos, sem reduzir perfis, raio ou margens.
