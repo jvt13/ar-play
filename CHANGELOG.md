@@ -7,7 +7,8 @@
 - Consulta interna por região, acima/abaixo, cobertura desconhecida e possíveis bordas. Memória/revalidação próprias limitadas à sessão/geração; dados ausentes/oclusão não comprovam remoção.
 - Visualização de superfícies independente, desligada por padrão, com buffer GPU separado e legenda; alturas relativas no painel e até oito resumos anônimos no diagnóstico recuperável.
 - Buffers/cadência/orçamento cooperativo explícitos, testes geométricos/temporais e comparação integral de 39 sequências com a 1.1.9 em três estados da nova camada. Sem subida, gravidade, aterrissagem, oclusão ou mudanças nos personagens/salto.
-- SemVer de pré-lançamento compartilhado entre runtime/interface/diagnóstico/cache; revisão `arp005a-20261127-r1`, cache `ar-play-v1.2.0-alpha.1-r1`. Migração PWA desde a 1.1.9 acrescentada; ativação explícita preservada, sem recarregar AR ativo. Homologação da camada alfa pendente.
+- SemVer de pré-lançamento compartilhado entre runtime/interface/diagnóstico/cache; revisão `arp005a-20261127-r2`, cache `ar-play-v1.2.0-alpha.1-r2`. Migração PWA desde a 1.1.9 acrescentada; ativação explícita preservada, sem recarregar AR ativo. Homologação da camada alfa pendente.
+- Revisão r2 mantém expiração das superfícies mesmo com processamento indisponível; nova regressão temporal e migração real r1→r2 cobertas. Validação de produção compara também revisão/cache/worker exatos, não apenas o número da versão.
 - A 1.1.9 permanece recuperável em `33bb98ed78dfc3c48885ea8b6298f6a84568cf1a`, homologada no dispositivo nos cenários relatados de posicionamento, movimento, móveis, objetos pequenos e memória dinâmica.
 
 ## 1.1.9 — 2026-11-26

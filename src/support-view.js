@@ -19,8 +19,8 @@ export class SupportView{
   if(this.generation!==source.mapGeneration||this.session!==source.sessionId){
    this.layer.reset(source.mapGeneration??0,source.anchor,source.normal);this.generation=source.mapGeneration;this.session=source.sessionId;this.lastAcquisition=-Infinity;this.lastBuild=-Infinity;this.release();
   }
-  if(this.disabled){this.layer.state='unavailable';if(this.count||this.resource.debugBuffer)this.release();this.readout(time,panelOpen);return;}
   if(time-(this.lastMaintenance??-Infinity)>=250){this.layer.maintain(time);this.lastMaintenance=time;}
+  if(this.disabled){this.layer.state='unavailable';if(this.count||this.resource.debugBuffer)this.release();this.readout(time,panelOpen);return;}
   if(!source.sessionActive||!source.anchored||source.suspended||!source.tracking||!source.available){this.layer.state=!source.available?'depth-unavailable':'waiting-for-reconstruction';this.release();this.readout(time,panelOpen);return;}
   if(source.lastSample!==this.lastAcquisition&&Number.isFinite(source.lastSample)){
    this.lastAcquisition=source.lastSample;const p=source.projector.pose;this.camera[0]=p[12];this.camera[1]=p[13];this.camera[2]=p[14];

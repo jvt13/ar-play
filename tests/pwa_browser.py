@@ -23,7 +23,7 @@ def repeated_retreat(context,base):
 
 def run_updates(browser,root):
  build=json.loads(subprocess.check_output(['node','--input-type=module','-e',"import {BUILD} from './src/build.js';console.log(JSON.stringify(BUILD))"],cwd=root))
- revision=build['revision'];next_revision=revision.removesuffix('-r1')+'-r2'
+ revision=build['revision'];revision_number=int(revision.rsplit('-r',1)[1]);next_revision=revision.rsplit('-r',1)[0]+'-r'+str(revision_number+1);next_cache=build['cache'].rsplit('-r',1)[0]+'-r'+str(revision_number+1)
  legacy=json.loads((root/'tests/fixtures/legacy-workers.json').read_text(encoding='utf-8'))
  state={'phase':'legacy','worker':legacy[0]['worker'],'version':'1.1.5'}
  class Handler(BaseHTTPRequestHandler):
@@ -43,7 +43,7 @@ def run_updates(browser,root):
     target=(root/name).resolve()
     if not target.is_relative_to(root) or not target.is_file():self.send_error(404);return
     data=target.read_bytes();mime={'.js':'text/javascript','.css':'text/css','.html':'text/html','.png':'image/png','.webmanifest':'application/manifest+json'}[target.suffix]
-    if state['phase']=='next' and name=='src/build.js':data=data.replace(b'revisionNumber=1',b'revisionNumber=2')
+    if state['phase']=='next' and name=='src/build.js':data=data.replace(('revisionNumber='+str(revision_number)).encode(),('revisionNumber='+str(revision_number+1)).encode())
     if state['phase']=='next' and name=='sw.js':data=b'// simulated next revision\n'+data
    else:self.send_error(404);return
    self.send_response(200);self.send_header('Content-Type',mime);self.send_header('Cache-Control','no-store');self.end_headers();self.wfile.write(data)
@@ -71,7 +71,7 @@ def run_updates(browser,root):
    assert page.evaluate('window.__arplay.build().revision')==revision
    page.locator('#demo').click();assert page.locator('#updateApp').is_enabled();page.locator('#updateApp').click()
    page.wait_for_function('(r)=>window.__arplay?.build().revision === r',arg=next_revision,timeout=30000)
-   assert page.evaluate('caches.keys()')==[build['cache'].removesuffix('-r1')+'-r2']
+   assert page.evaluate('caches.keys()')==[next_cache]
    context.set_offline(True);page.reload();page.wait_for_function('window.__arplay?.state().frameCount > 2')
    assert page.evaluate('window.__arplay.build().revision')==next_revision
    context.close();print('PASS PWA MIGRATION '+item['version']+' -> '+build['version']+'; coherent modules, manual activation, old AR continuity, next revision blocked in XR and offline',flush=True)

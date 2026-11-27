@@ -67,7 +67,7 @@ test('service worker precaches public resources, removes obsolete caches and ser
           }
         }};
       },
-      keys: async () => ['ar-play-v1.0.0', 'ar-play-v1.0.1', 'ar-play-v1.0.2', 'ar-play-v1.1.0', 'ar-play-v1.1.1', 'ar-play-v1.1.2', 'ar-play-v1.1.3', 'ar-play-v1.1.3-r2', 'ar-play-v1.1.4', 'ar-play-v1.1.5', 'ar-play-v1.1.6', 'ar-play-v1.1.7', 'ar-play-v1.1.8-r1', 'ar-play-v1.1.9-r1', current, 'another-app-cache'],
+      keys: async () => ['ar-play-v1.0.0', 'ar-play-v1.0.1', 'ar-play-v1.0.2', 'ar-play-v1.1.0', 'ar-play-v1.1.1', 'ar-play-v1.1.2', 'ar-play-v1.1.3', 'ar-play-v1.1.3-r2', 'ar-play-v1.1.4', 'ar-play-v1.1.5', 'ar-play-v1.1.6', 'ar-play-v1.1.7', 'ar-play-v1.1.8-r1', 'ar-play-v1.1.9-r1', 'ar-play-v1.2.0-alpha.1-r1', current, 'another-app-cache'],
       delete: async name => { removed.push(name); return true; },
       match: async request => stored.get(new URL(typeof request === 'string' ? request : request.url, base).href),
     },
@@ -87,7 +87,7 @@ test('service worker precaches public resources, removes obsolete caches and ser
   assert.equal(skipped,false); // Updates wait for an explicit safe activation.
   assert.equal(stored.size, 23);
   await lifecycle('activate');
-  assert.deepEqual(removed, ['ar-play-v1.0.0', 'ar-play-v1.0.1', 'ar-play-v1.0.2', 'ar-play-v1.1.0', 'ar-play-v1.1.1', 'ar-play-v1.1.2', 'ar-play-v1.1.3', 'ar-play-v1.1.3-r2', 'ar-play-v1.1.4', 'ar-play-v1.1.5', 'ar-play-v1.1.6', 'ar-play-v1.1.7', 'ar-play-v1.1.8-r1', 'ar-play-v1.1.9-r1']);
+  assert.deepEqual(removed, ['ar-play-v1.0.0', 'ar-play-v1.0.1', 'ar-play-v1.0.2', 'ar-play-v1.1.0', 'ar-play-v1.1.1', 'ar-play-v1.1.2', 'ar-play-v1.1.3', 'ar-play-v1.1.3-r2', 'ar-play-v1.1.4', 'ar-play-v1.1.5', 'ar-play-v1.1.6', 'ar-play-v1.1.7', 'ar-play-v1.1.8-r1', 'ar-play-v1.1.9-r1', 'ar-play-v1.2.0-alpha.1-r1']);
   assert.ok(claimed);
   const request = (file, mode = 'cors', method = 'GET') => ({url: new URL(file, base).href, mode, method});
   async function response(req) {

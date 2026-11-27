@@ -5,7 +5,7 @@ from functools import partial
 from threading import Thread
 from urllib.request import urlopen as _urlopen
 from urllib.error import HTTPError
-import tempfile, os, shutil, json, time, re
+import tempfile, os, shutil, json, time, re, subprocess
 
 def urlopen(*args,**kwargs):
  # Bounded transport retry for provider 5xx; all final 200/404 assertions stay strict.
@@ -17,6 +17,7 @@ def urlopen(*args,**kwargs):
    error.close();time.sleep(2**attempt)
 
 ROOT=Path(__file__).resolve().parents[1]
+EXPECTED_BUILD=json.loads(subprocess.check_output(['node','--input-type=module','-e',"import {BUILD} from './src/build.js';console.log(JSON.stringify(BUILD))"],cwd=ROOT))
 PUBLIC=['index.html','style.css','manifest.webmanifest','sw.js','src','icons']
 server=None
 staging=None
@@ -86,7 +87,8 @@ try:
   page.evaluate('navigator.serviceWorker.ready');page.wait_for_function('navigator.serviceWorker.controller !== null')
   assert page.evaluate('(async () => (await navigator.serviceWorker.ready).scope)()')==base_url
   version=json.loads((ROOT/'package.json').read_text(encoding='utf-8'))['version']
-  build=page.evaluate('window.__arplay.build()');cache=build['cache'];assert build['version']==version and build['revision'];assert page.locator('#appVersion').inner_text()=='v'+version
+  build=page.evaluate('window.__arplay.build()');cache=build['cache'];assert all(build[key]==EXPECTED_BUILD[key] for key in ['version','revision','cache','physicsReference']),(build,EXPECTED_BUILD);assert build['controllerRevision']==EXPECTED_BUILD['revision'];assert page.locator('#appVersion').inner_text()=='v'+version
+  print('PASS exact loaded runtime and worker '+json.dumps({key:build[key] for key in ['version','revision','cache','physicsReference','controllerRevision']}),flush=True)
   assert re.fullmatch(r'ar-play-v'+re.escape(version)+r'(-r[1-9][0-9]*)?',cache),cache
   assert page.evaluate('caches.keys()')==[cache]
   assert page.evaluate('(async () => (await (await caches.open("'+cache+'")).keys()).length)()')==23

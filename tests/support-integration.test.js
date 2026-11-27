@@ -38,7 +38,7 @@ test('ARP-005A bounded anonymous archive contains support summaries without abso
  archive.supportInfo=()=>{throw Error('provider failure')};archive.capture(archive.last.session,0,'manual-export',[],null,{});assert.equal(archive.last.supports.state,'unavailable');
 });
 test('ARP-005A prerelease identity is shared by package, runtime and cache',()=>{
- const packageInfo=JSON.parse(readFileSync(new URL('../package.json',import.meta.url),'utf8'));assert.equal(BUILD.version,'1.2.0-alpha.1');assert.equal(packageInfo.version,BUILD.version);assert.equal(BUILD.cache,'ar-play-v'+BUILD.version+'-r1');assert.match(BUILD.revision,/^arp005a-.*-r1$/);
+ const packageInfo=JSON.parse(readFileSync(new URL('../package.json',import.meta.url),'utf8'));assert.equal(BUILD.version,'1.2.0-alpha.1');assert.equal(packageInfo.version,BUILD.version);assert.equal(BUILD.cache,'ar-play-v'+BUILD.version+'-r2');assert.match(BUILD.revision,/^arp005a-.*-r2$/);
 });
 test('ARP-005A native floor/5cm support uses non-occupied samples and preserves stable occupancies',()=>{
  const nativeBaseline=JSON.parse(readFileSync(new URL('./fixtures/support-native-v119.json',import.meta.url),'utf8'));
@@ -49,4 +49,9 @@ test('ARP-005A native floor/5cm support uses non-occupied samples and preserves 
   let supportOutsideOccupancy=false;for(const r of view.layer.regions)if(r.active)for(let bit=0;bit<16;bit++)if(r.confirmedMask&(1<<bit)){const x=view.layer.origin[0]+r.ix*.12+(bit%4+.5)*.03,z=view.layer.origin[2]+r.iz*.12+(Math.floor(bit/4)+.5)*.03;if(s.map.stateAt(x,r.a*x+r.b*z+r.c,z,13987)!=='occupied')supportOutsideOccupancy=true;}
   assert.equal(supportOutsideOccupancy,true,'support includes reconstructed samples not stored as occupied voxels');
  }
+});
+test('ARP-005A unavailable perception still ages and expires its retained supports',()=>{
+ const s=new collision.ARCollisions({}, {},()=>0),view=new SupportView(engine(),{},()=>0),p=plane({height:.3});s.start('waiting');s.place([0,0,0]);s.setEnabled(true);s.projector.pose.set(math.tr(0,1.2,0));s.points.set(p);s.used=p.length/3;
+ for(let i=0;i<4;i++){s.lastSample=1000+i*250;view.update(s,s.lastSample);}assert.ok(view.snapshot().confirmedRegions>0);
+ view.disabled=true;view.update(s,50000);assert.equal(view.snapshot().regions,0,'unavailability must not freeze the 45-second retention clock');assert.equal(view.snapshot().state,'unavailable');assert.ok(s.move([0,0,0],.2,0,50000).x>.19);
 });
