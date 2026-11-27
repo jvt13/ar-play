@@ -31,7 +31,7 @@ test('manifest, HTML, CSS and ES modules resolve inside /ar-play/', () => {
   }
   for (const match of read('index.html').matchAll(/(?:src|href)="([^"]+)"/g)) localReference(match[1]);
   for (const match of read('style.css').matchAll(/url\(['"]?([^)'"\s]+)['"]?\)/g)) localReference(match[1]);
-  for (const name of ['ground', 'build', 'pwa', 'boot', 'app', 'engine', 'math', 'depth', 'spatial-map', 'collision', 'movement-probe', 'volume', 'spatial-debug', 'revalidation', 'diagnostics']) {
+  for (const name of ['support-surfaces','support-view','ground', 'build', 'pwa', 'boot', 'app', 'engine', 'math', 'depth', 'spatial-map', 'collision', 'movement-probe', 'volume', 'spatial-debug', 'revalidation', 'diagnostics']) {
     const parent = new URL(`src/${name}.js`, base);
     for (const match of read(`src/${name}.js`).matchAll(/\bfrom\s*['"]([^'"]+)['"]/g)) localReference(match[1], parent);
   }
@@ -67,7 +67,7 @@ test('service worker precaches public resources, removes obsolete caches and ser
           }
         }};
       },
-      keys: async () => ['ar-play-v1.0.0', 'ar-play-v1.0.1', 'ar-play-v1.0.2', 'ar-play-v1.1.0', 'ar-play-v1.1.1', 'ar-play-v1.1.2', 'ar-play-v1.1.3', 'ar-play-v1.1.3-r2', 'ar-play-v1.1.4', 'ar-play-v1.1.5', 'ar-play-v1.1.6', 'ar-play-v1.1.7', current, 'another-app-cache'],
+      keys: async () => ['ar-play-v1.0.0', 'ar-play-v1.0.1', 'ar-play-v1.0.2', 'ar-play-v1.1.0', 'ar-play-v1.1.1', 'ar-play-v1.1.2', 'ar-play-v1.1.3', 'ar-play-v1.1.3-r2', 'ar-play-v1.1.4', 'ar-play-v1.1.5', 'ar-play-v1.1.6', 'ar-play-v1.1.7', 'ar-play-v1.1.8-r1', 'ar-play-v1.1.9-r1', current, 'another-app-cache'],
       delete: async name => { removed.push(name); return true; },
       match: async request => stored.get(new URL(typeof request === 'string' ? request : request.url, base).href),
     },
@@ -85,9 +85,9 @@ test('service worker precaches public resources, removes obsolete caches and ser
   await lifecycle('install');
   assert.equal(opened, current);
   assert.equal(skipped,false); // Updates wait for an explicit safe activation.
-  assert.equal(stored.size, 21);
+  assert.equal(stored.size, 23);
   await lifecycle('activate');
-  assert.deepEqual(removed, ['ar-play-v1.0.0', 'ar-play-v1.0.1', 'ar-play-v1.0.2', 'ar-play-v1.1.0', 'ar-play-v1.1.1', 'ar-play-v1.1.2', 'ar-play-v1.1.3', 'ar-play-v1.1.3-r2', 'ar-play-v1.1.4', 'ar-play-v1.1.5', 'ar-play-v1.1.6', 'ar-play-v1.1.7']);
+  assert.deepEqual(removed, ['ar-play-v1.0.0', 'ar-play-v1.0.1', 'ar-play-v1.0.2', 'ar-play-v1.1.0', 'ar-play-v1.1.1', 'ar-play-v1.1.2', 'ar-play-v1.1.3', 'ar-play-v1.1.3-r2', 'ar-play-v1.1.4', 'ar-play-v1.1.5', 'ar-play-v1.1.6', 'ar-play-v1.1.7', 'ar-play-v1.1.8-r1', 'ar-play-v1.1.9-r1']);
   assert.ok(claimed);
   const request = (file, mode = 'cors', method = 'GET') => ({url: new URL(file, base).href, mode, method});
   async function response(req) {
@@ -98,7 +98,7 @@ test('service worker precaches public resources, removes obsolete caches and ser
   assert.ok((await response(request('./', 'navigate'))).network);
   networkFails = true;
   assert.equal((await response(request('./?test=1', 'navigate'))).url, new URL('index.html', base).href);
-  for (const file of ['style.css','src/ground.js','src/boot.js','src/build.js','src/pwa.js', 'src/app.js', 'src/depth.js', 'src/spatial-map.js', 'src/collision.js', 'src/movement-probe.js', 'src/volume.js', 'src/spatial-debug.js', 'src/revalidation.js', 'src/diagnostics.js', 'src/engine.js', 'src/math.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png']) {
+  for (const file of ['style.css','src/support-surfaces.js','src/support-view.js','src/ground.js','src/boot.js','src/build.js','src/pwa.js', 'src/app.js', 'src/depth.js', 'src/spatial-map.js', 'src/collision.js', 'src/movement-probe.js', 'src/volume.js', 'src/spatial-debug.js', 'src/revalidation.js', 'src/diagnostics.js', 'src/engine.js', 'src/math.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png']) {
     assert.ok((await response(request(file))).cached, `Offline resource missing: ${file}`);
   }
   assert.equal(await response(request('./', 'cors', 'POST')), undefined);

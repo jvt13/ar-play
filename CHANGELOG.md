@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.2.0-alpha.1 — 2026-11-27
+
+- Camada passiva independente de identificação de apoios a partir dos pontos já reconstruídos, incluindo chão e múltiplas alturas. Nenhuma segunda aquisição ou alteração da física horizontal homologada da 1.1.9.
+- Planos locais exigem distribuição espacial/normal/resíduos e evidência temporal; cobertura por pequenas regiões realmente sustentadas. Pontos esparsos são candidatos de área zero. Paredes, faces laterais, vistas inferiores, curvas e casos ambíguos permanecem incompatíveis ou incertos.
+- Consulta interna por região, acima/abaixo, cobertura desconhecida e possíveis bordas. Memória/revalidação próprias limitadas à sessão/geração; dados ausentes/oclusão não comprovam remoção.
+- Visualização de superfícies independente, desligada por padrão, com buffer GPU separado e legenda; alturas relativas no painel e até oito resumos anônimos no diagnóstico recuperável.
+- Buffers/cadência/orçamento cooperativo explícitos, testes geométricos/temporais e comparação integral de 39 sequências com a 1.1.9 em três estados da nova camada. Sem subida, gravidade, aterrissagem, oclusão ou mudanças nos personagens/salto.
+- SemVer de pré-lançamento compartilhado entre runtime/interface/diagnóstico/cache; revisão `arp005a-20261127-r1`, cache `ar-play-v1.2.0-alpha.1-r1`. Migração PWA desde a 1.1.9 acrescentada; ativação explícita preservada, sem recarregar AR ativo. Homologação da camada alfa pendente.
+- A 1.1.9 permanece recuperável em `33bb98ed78dfc3c48885ea8b6298f6a84568cf1a`, homologada no dispositivo nos cenários relatados de posicionamento, movimento, móveis, objetos pequenos e memória dinâmica.
+
 ## 1.1.9 — 2026-11-26
 
 - Chão conectado ao apoio pode ser reconhecido por evidência espacial e temporal, usando a reconstrução existente; planos elevados sem âncora continuam incertos. Corrige falsos bloqueios da fixture inclinada até +9 cm sem ampliar tolerância vertical ou ignorar objetos baixos.
